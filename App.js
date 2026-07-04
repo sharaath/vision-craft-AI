@@ -58,7 +58,8 @@ export default function App() {
 
   // Dashboard and history states
   const [history, setHistory] = useState([]);
-  const [activeView, setActiveView] = useState('dashboard'); // dashboard, wizard, loading, results
+  const [activeView, setActiveView] = useState('dashboard'); // dashboard, wizard, loading, project_hub, category_detail
+  const [selectedCategory, setSelectedCategory] = useState('blueprint');
 
   // Load history from AsyncStorage on startup
   useEffect(() => {
@@ -129,7 +130,7 @@ export default function App() {
           });
         }
         setCollapsedFiles(initialCollapsed);
-        setActiveView('results');
+        setActiveView('project_hub');
       } else {
         Alert.alert('Generation Error', result.error || 'Failed to generate startup blueprint.');
       }
@@ -264,7 +265,7 @@ export default function App() {
                   style={{ flex: 1 }} 
                   onPress={() => {
                     setData(item);
-                    setActiveView('results');
+                    setActiveView('project_hub');
                   }}
                 >
                   <Text style={styles.historyCardName} numberOfLines={1}>{item.name}</Text>
@@ -299,19 +300,123 @@ export default function App() {
             <Text style={styles.fabText}>+ Craft New</Text>
           </TouchableOpacity>
         )}
+   // PROJECT HUB SCREEN
+  if (activeView === 'project_hub' && data) {
+    const codeFilesCount = data.code?.files?.length || 0;
+    const advisorSlidesCount = data.advisor?.deck?.length || 0;
+    const marketingPostsCount = data.marketing?.posts?.length || 0;
+
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0a0a0f' }}>
+        <StatusBar style="light" />
+
+        {/* Header */}
+        <View style={styles.resultsHeader}>
+          <TouchableOpacity onPress={() => setActiveView('dashboard')} style={styles.backBtn}>
+            <Text style={styles.backBtnText}>← Dashboard</Text>
+          </TouchableOpacity>
+          <View style={{ flex: 1, marginHorizontal: 10 }}>
+            <Text style={styles.startupName} numberOfLines={1}>{data.name}</Text>
+          </View>
+          <TouchableOpacity onPress={handleRestart} style={styles.restartBtn}>
+            <Text style={styles.restartText}>+ New</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Project Hub Title */}
+        <View style={styles.hubTitleSection}>
+          <Text style={styles.hubTitle}>🚀 Startup Project Hub</Text>
+          <Text style={styles.hubSubtitle}>Explore different categories generated for this startup.</Text>
+        </View>
+
+        {/* Hub Grid Categories */}
+        <ScrollView style={styles.hubScroll} contentContainerStyle={{ paddingBottom: 40 }}>
+          {/* Card 1: Blueprint Overview */}
+          <TouchableOpacity 
+            style={styles.hubCard} 
+            onPress={() => {
+              setSelectedCategory('blueprint');
+              setActiveView('category_detail');
+            }}
+          >
+            <View style={[styles.hubIconBadge, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
+              <Text style={styles.hubIconText}>📋</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.hubCardTitle}>Blueprint Overview</Text>
+              <Text style={styles.hubCardDesc}>Executive summary, problem analysis, solution, revenue model, and stack.</Text>
+            </View>
+            <View style={styles.hubBadge}>
+              <Text style={styles.hubBadgeText}>5 Sections</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Card 2: Code Boilerplates */}
+          <TouchableOpacity 
+            style={styles.hubCard} 
+            onPress={() => {
+              setSelectedCategory('code');
+              setActiveView('category_detail');
+            }}
+          >
+            <View style={[styles.hubIconBadge, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
+              <Text style={styles.hubIconText}>💻</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.hubCardTitle}>Technical Boilerplate</Text>
+              <Text style={styles.hubCardDesc}>Production-ready code files and structural boilerplates for development.</Text>
+            </View>
+            <View style={styles.hubBadge}>
+              <Text style={styles.hubBadgeText}>{codeFilesCount} {codeFilesCount === 1 ? 'File' : 'Files'}</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Card 3: Advisor Pitch Deck */}
+          <TouchableOpacity 
+            style={styles.hubCard} 
+            onPress={() => {
+              setSelectedCategory('advisor');
+              setActiveView('category_detail');
+            }}
+          >
+            <View style={[styles.hubIconBadge, { backgroundColor: 'rgba(167, 139, 250, 0.15)' }]}>
+              <Text style={styles.hubIconText}>🧠</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.hubCardTitle}>Advisor Pitch Deck</Text>
+              <Text style={styles.hubCardDesc}>Structured slide decks, target market metrics, and go-to-market strategies.</Text>
+            </View>
+            <View style={styles.hubBadge}>
+              <Text style={styles.hubBadgeText}>{advisorSlidesCount} {advisorSlidesCount === 1 ? 'Slide' : 'Slides'}</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Card 4: Marketing Social Copy */}
+          <TouchableOpacity 
+            style={styles.hubCard} 
+            onPress={() => {
+              setSelectedCategory('marketing');
+              setActiveView('category_detail');
+            }}
+          >
+            <View style={[styles.hubIconBadge, { backgroundColor: 'rgba(236, 72, 153, 0.15)' }]}>
+              <Text style={styles.hubIconText}>📣</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.hubCardTitle}>Social Marketing Copy</Text>
+              <Text style={styles.hubCardDesc}>Ready-made marketing posts and tags for LinkedIn, Instagram, and Twitter.</Text>
+            </View>
+            <View style={styles.hubBadge}>
+              <Text style={styles.hubBadgeText}>{marketingPostsCount} {marketingPostsCount === 1 ? 'Post' : 'Posts'}</Text>
+            </View>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
     );
   }
 
-  // RESULTS SCREEN
-  if (activeView === 'results' && data) {
-    const tabs = [
-      { key: 'blueprint', label: '📋 Blueprint' },
-      { key: 'code', label: '💻 Code' },
-      { key: 'advisor', label: '🧠 Advisor' },
-      { key: 'marketing', label: '📣 Marketing' },
-    ];
-
+  // CATEGORY DETAIL SCREEN
+  if (activeView === 'category_detail' && data) {
     const fullBlueprintText = `
 Executive Summary:
 ${data.blueprint?.executive_summary}
@@ -329,48 +434,39 @@ Tech Stack:
 ${data.blueprint?.tech_stack}
 `;
 
+    // Map selected category to a human-readable title
+    const categoryTitles = {
+      blueprint: '📋 Startup Blueprint',
+      code: '💻 Developer Code',
+      advisor: '🧠 Advisor Slides',
+      marketing: '📣 Social Marketing',
+    };
+
     return (
       <View style={styles.container}>
         <StatusBar style="light" />
 
         {/* Header */}
         <View style={styles.resultsHeader}>
-          <TouchableOpacity onPress={() => setActiveView('dashboard')} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>← Dashboard</Text>
+          <TouchableOpacity onPress={() => setActiveView('project_hub')} style={styles.backBtn}>
+            <Text style={styles.backBtnText}>← Hub</Text>
           </TouchableOpacity>
           <View style={{ flex: 1, marginHorizontal: 10 }}>
-            <Text style={styles.startupName} numberOfLines={1}>{data.name}</Text>
+            <Text style={styles.startupName} numberOfLines={1}>{categoryTitles[selectedCategory] || 'Details'}</Text>
           </View>
           <TouchableOpacity onPress={handleRestart} style={styles.restartBtn}>
             <Text style={styles.restartText}>+ New</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Tabs */}
-        <View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBar} contentContainerStyle={{ paddingRight: 32 }}>
-            {tabs.map(tab => (
-              <TouchableOpacity
-                key={tab.key}
-                style={[styles.tab, activeTab === tab.key && styles.activeTab]}
-                onPress={() => setActiveTab(tab.key)}
-              >
-                <Text style={[styles.tabText, activeTab === tab.key && styles.activeTabText]}>
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
         {/* Content */}
         <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 60 }}>
 
-          {/* BLUEPRINT TAB */}
-          {activeTab === 'blueprint' && (
+          {/* BLUEPRINT DETAILS */}
+          {selectedCategory === 'blueprint' && (
             <View style={{ marginBottom: 40 }}>
               <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionTitle}>📊 Startup Blueprint Overview</Text>
+                <Text style={styles.sectionTitle}>Overview Details</Text>
                 <TouchableOpacity style={styles.actionBtn} onPress={() => handleShare(`${data.name} Blueprint`, fullBlueprintText)}>
                   <Text style={styles.actionBtnText}>Share All</Text>
                 </TouchableOpacity>
@@ -434,9 +530,9 @@ ${data.blueprint?.tech_stack}
           )}
 
           {/* CODE TAB */}
-          {activeTab === 'code' && (
+          {selectedCategory === 'code' && (
             <View style={{ marginBottom: 40 }}>
-              <Text style={styles.sectionTitle}>💻 Generated Code Files</Text>
+              <Text style={styles.sectionTitle}>Boilerplate Files</Text>
               {data.code?.files?.length === 0 ? (
                 <Text style={styles.emptyText}>No code files generated.</Text>
               ) : (
@@ -471,9 +567,9 @@ ${data.blueprint?.tech_stack}
           )}
 
           {/* ADVISOR TAB */}
-          {activeTab === 'advisor' && (
+          {selectedCategory === 'advisor' && (
             <View style={{ marginBottom: 40 }}>
-              <Text style={styles.sectionTitle}>🧠 Startup Advisor Deck</Text>
+              <Text style={styles.sectionTitle}>Slides & Strategy</Text>
               {data.advisor?.deck?.length === 0 ? (
                 <Text style={styles.emptyText}>No slides generated.</Text>
               ) : (
@@ -498,9 +594,9 @@ ${data.blueprint?.tech_stack}
           )}
 
           {/* MARKETING TAB */}
-          {activeTab === 'marketing' && (
+          {selectedCategory === 'marketing' && (
             <View style={{ marginBottom: 40 }}>
-              <Text style={styles.sectionTitle}>📣 Marketing Posts</Text>
+              <Text style={styles.sectionTitle}>Copy Drafts</Text>
               {data.marketing?.posts?.length === 0 ? (
                 <Text style={styles.emptyText}>No posts generated.</Text>
               ) : (
@@ -1172,6 +1268,72 @@ const styles = StyleSheet.create({
   sectionCardTitle: {
     color: '#ffffff',
     fontSize: 16,
+    fontWeight: 'bold',
+  },
+  // PROJECT HUB
+  hubTitleSection: {
+    paddingHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  hubTitle: {
+    color: '#ffffff',
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
+  hubSubtitle: {
+    color: '#94a3b8',
+    fontSize: 13,
+    marginTop: 6,
+  },
+  hubScroll: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  hubCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#111122',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#1e1b4b',
+  },
+  hubIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  hubIconText: {
+    fontSize: 22,
+  },
+  hubCardTitle: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  hubCardDesc: {
+    color: '#64748b',
+    fontSize: 12,
+    lineHeight: 16,
+    marginRight: 10,
+  },
+  hubBadge: {
+    backgroundColor: '#1e1b4b',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#4338ca',
+  },
+  hubBadgeText: {
+    color: '#c084fc',
+    fontSize: 10,
     fontWeight: 'bold',
   },
 });
