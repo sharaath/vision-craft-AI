@@ -24,7 +24,8 @@ from flask_cors import CORS
 
 from generator import GenerationError, generate_startup
 
-load_dotenv()
+dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+load_dotenv(dotenv_path=dotenv_path)
 
 app = Flask(__name__)
 CORS(app)  # allow the Expo app (different origin/device) to call this API
@@ -71,6 +72,6 @@ def server_error(_err):
 
 
 if __name__ == "__main__":
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("WARNING: ANTHROPIC_API_KEY is not set. Set it in your environment or a .env file.")
+    if not os.environ.get("GEMINI_API_KEY"):
+        print("WARNING: GEMINI_API_KEY is not set. Set it in your environment or a .env file.")
     app.run(host="0.0.0.0", port=PORT, debug=True)
