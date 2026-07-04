@@ -1,9 +1,9 @@
 import { StatusBar } from 'expo-status-bar';
 import {
   StyleSheet, Text, View, TextInput, TouchableOpacity,
-  ScrollView, ActivityIndicator, Alert, Share
+  ScrollView, ActivityIndicator, Alert, Share, Modal
 } from 'react-native';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Updates from 'expo-updates';
@@ -59,22 +59,70 @@ export default function App() {
 
   // Dashboard and history states
   const [history, setHistory] = useState([]);
-  const [activeView, setActiveView] = useState('dashboard'); // dashboard, wizard, loading, project_hub, category_detail
+  const [activeView, setActiveView] = useState('login'); // login, dashboard, wizard, loading, project_hub, category_detail
   const [selectedCategory, setSelectedCategory] = useState('blueprint');
 
-  // Load history from AsyncStorage on startup
+  // Mobile Login states
+  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [identifierErr, setIdentifierErr] = useState('');
+  const [passwordErr, setPasswordErr] = useState('');
+  const [isLoginLoading, setIsLoginLoading] = useState(false);
+  const [loginErrorSummary, setLoginErrorSummary] = useState('');
+
+  // Forgot Password modal states
+  const [showFp, setShowFp] = useState(false);
+  const [fpStep, setFpStep] = useState(1); // 1, 2, 3, 4
+  const [fpIdentifier, setFpIdentifier] = useState('');
+  const [fpOtp, setFpOtp] = useState(['', '', '', '', '', '']);
+  const [fpNewPwd, setFpNewPwd] = useState('');
+  const [fpConfirmPwd, setFpConfirmPwd] = useState('');
+  const [fpIdentifierErr, setFpIdentifierErr] = useState('');
+  const [fpOtpErr, setFpOtpErr] = useState('');
+  const [fpNewPwdErr, setFpNewPwdErr] = useState('');
+  const [fpConfirmPwdErr, setFpConfirmPwdErr] = useState('');
+  const [isFpLoading, setIsFpLoading] = useState(false);
+  const [fpResendTimer, setFpResendTimer] = useState(0);
+
+  // Refs for OTP input boxes focus shifting
+  const otpRefs = [
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+  ];
+
+  // Load history and initialize authentication details from AsyncStorage on startup
   useEffect(() => {
-    const loadHistory = async () => {
+    const initializeApp = async () => {
       try {
+        // Load history
         const stored = await AsyncStorage.getItem('VISIONCRAFTAI_HISTORY');
         if (stored) {
           setHistory(JSON.parse(stored));
         }
+
+        // Load Remember Me username
+        const savedUsername = await AsyncStorage.getItem('visioncraft_saved_username');
+        if (savedUsername) {
+          setLoginIdentifier(savedUsername);
+          setRememberMe(true);
+        }
+
+        // Check auto-login JWT
+        const token = await AsyncStorage.getItem('visioncraft_jwt_token');
+        if (token) {
+          setActiveView('dashboard');
+        }
       } catch (e) {
-        console.error('Failed to load history', e);
+        console.error('Failed to initialize app', e);
       }
     };
-    loadHistory();
+    initializeApp();
   }, []);
 
   // Safe OTA Update Checker
@@ -113,6 +161,265 @@ export default function App() {
     }
     return () => clearInterval(interval);
   }, [loading]);
+
+  // -----------------------------------------------------------
+  // Mobile Login Validation & Handlers
+  // -----------------------------------------------------------
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
+  const validateIdentifierStr = (val) => {
+    const clean = val.trim();
+    if (!clean) return 'Email or Mobile is required.';
+    const digitsOnly = /^[0-9]+$/.test(clean);
+    if (digitsOnly) {
+      if (clean.length !== 10) return 'Mobile must be exactly 10 digits.';
+      return '';
+    }
+    if (!emailRegex.test(clean)) return 'Enter a valid email address.';
+    return '';
+  };
+
+  const getPasswordStrengthScore = (pwd) => {
+    if (!pwd || pwd.length < 8) return 1; // Weak
+    let score = 1;
+    if (/[0-9]/.test(pwd) && /[a-zA-Z]/.test(pwd)) score++;
+    if (/[^a-zA-Z0-9]/.test(pwd) || /[A-Z]/.test(pwd)) score++;
+    return score; // 1 = Weak, 2 = Medium, 3 = Strong
+  };
+
+  const handleIdentifierChange = (val) => {
+    setLoginIdentifier(val);
+    setIdentifierErr(validateIdentifierStr(val));
+    setLoginErrorSummary('');
+  };
+
+  const handlePasswordChange = (val) => {
+    setLoginPassword(val);
+    if (!val) {
+      setPasswordErr('Password is required.');
+    } else if (val.length < 8) {
+      setPasswordErr('Password must be at least 8 characters.');
+    } else {
+      setPasswordErr('');
+    }
+    setLoginErrorSummary('');
+  };
+
+  const handleLoginSubmit = async () => {
+    const idErr = validateIdentifierStr(loginIdentifier);
+    const pwdErr = !loginPassword ? 'Password is required.' : (loginPassword.length < 8 ? 'Password must be at least 8 characters.' : '');
+    
+    if (idErr || pwdErr) {
+      setIdentifierErr(idErr);
+      setPasswordErr(pwdErr);
+      return;
+    }
+
+    setIsLoginLoading(true);
+    setLoginErrorSummary('');
+
+    try {
+      const response = await fetch(`${serverUrl.trim()}/api/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true'
+        },
+        body: JSON.stringify({ identifier: loginIdentifier.trim(), password: loginPassword })
+      });
+      const result = await response.json();
+      if (response.ok) {
+        // Save jwt
+        await AsyncStorage.setItem('visioncraft_jwt_token', result.token);
+
+        // Remember Me state
+        if (rememberMe) {
+          await AsyncStorage.setItem('visioncraft_saved_username', loginIdentifier.trim());
+        } else {
+          await AsyncStorage.removeItem('visioncraft_saved_username');
+        }
+
+        // Clean form & transition
+        setLoginPassword('');
+        setLoginErrorSummary('');
+        setActiveView('dashboard');
+      } else {
+        setLoginErrorSummary(result.error || 'Login failed. Incorrect identifier or password.');
+      }
+    } catch (err) {
+      setLoginErrorSummary('Connection error. Make sure your server is running and accessible.');
+      console.error(err);
+    }
+    setIsLoginLoading(false);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('visioncraft_jwt_token');
+      // Reset details & route to login
+      setLoginPassword('');
+      setLoginErrorSummary('');
+      setActiveView('login');
+    } catch (e) {
+      console.error("Failed to clear auth token on logout", e);
+    }
+  };
+
+  // -----------------------------------------------------------
+  // Forgot Password Flow Handlers
+  // -----------------------------------------------------------
+  const openFpModal = () => {
+    setFpIdentifier('');
+    setFpOtp(['', '', '', '', '', '']);
+    setFpNewPwd('');
+    setFpConfirmPwd('');
+    setFpIdentifierErr('');
+    setFpOtpErr('');
+    setFpNewPwdErr('');
+    setFpConfirmPwdErr('');
+    setFpStep(1);
+    setFpResendTimer(0);
+    setShowFp(true);
+  };
+
+  // Start Resend timer
+  const startFpTimer = () => {
+    setFpResendTimer(59);
+  };
+
+  useEffect(() => {
+    let timer;
+    if (fpResendTimer > 0 && showFp) {
+      timer = setTimeout(() => {
+        setFpResendTimer(prev => prev - 1);
+      }, 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [fpResendTimer, showFp]);
+
+  const handleFpSendOtp = async () => {
+    const err = validateIdentifierStr(fpIdentifier);
+    if (err) {
+      setFpIdentifierErr(err);
+      return;
+    }
+    setFpIdentifierErr('');
+    setIsFpLoading(true);
+
+    try {
+      const response = await fetch(`${serverUrl.trim()}/api/send-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true'
+        },
+        body: JSON.stringify({ identifier: fpIdentifier.trim() })
+      });
+      const result = await response.json();
+      if (response.ok) {
+        startFpTimer();
+        setFpStep(2);
+      } else {
+        setFpIdentifierErr(result.error || 'User not found with this identifier.');
+      }
+    } catch (err) {
+      Alert.alert('Network Error', 'Could not reach server.');
+    }
+    setIsFpLoading(false);
+  };
+
+  const handleFpOtpChange = (text, index) => {
+    const newOtp = [...fpOtp];
+    const digit = text.replace(/[^0-9]/g, '');
+    newOtp[index] = digit;
+    setFpOtp(newOtp);
+    setFpOtpErr('');
+
+    if (digit && index < 5) {
+      otpRefs[index + 1].current?.focus();
+    }
+  };
+
+  const handleFpOtpKeyPress = (e, index) => {
+    if (e.nativeEvent.key === 'Backspace') {
+      if (!fpOtp[index] && index > 0) {
+        const newOtp = [...fpOtp];
+        newOtp[index - 1] = '';
+        setFpOtp(newOtp);
+        otpRefs[index - 1].current?.focus();
+      }
+    }
+  };
+
+  const handleFpVerifyOtp = async () => {
+    const otpCode = fpOtp.join('');
+    if (otpCode.length !== 6) {
+      setFpOtpErr('Please enter the 6-digit code.');
+      return;
+    }
+    setFpOtpErr('');
+    setIsFpLoading(true);
+
+    try {
+      const response = await fetch(`${serverUrl.trim()}/api/verify-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true'
+        },
+        body: JSON.stringify({ identifier: fpIdentifier.trim(), otp: otpCode })
+      });
+      const result = await response.json();
+      if (response.ok) {
+        setFpStep(3);
+      } else {
+        setFpOtpErr(result.error || 'Invalid OTP code. Try using: 123456.');
+      }
+    } catch (err) {
+      Alert.alert('Network Error', 'Could not reach server.');
+    }
+    setIsFpLoading(false);
+  };
+
+  const handleFpResetPassword = async () => {
+    let isValid = true;
+    if (fpNewPwd.length < 8) {
+      setFpNewPwdErr('Password must be at least 8 characters.');
+      isValid = false;
+    } else {
+      setFpNewPwdErr('');
+    }
+
+    if (fpNewPwd !== fpConfirmPwd) {
+      setFpConfirmPwdErr('Passwords do not match.');
+      isValid = false;
+    } else {
+      setFpConfirmPwdErr('');
+    }
+
+    if (!isValid) return;
+    setIsFpLoading(true);
+
+    try {
+      const response = await fetch(`${serverUrl.trim()}/api/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true'
+        },
+        body: JSON.stringify({ identifier: fpIdentifier.trim(), password: fpNewPwd })
+      });
+      const result = await response.json();
+      if (response.ok) {
+        setFpStep(4);
+      } else {
+        setFpNewPwdErr(result.error || 'Failed to reset password.');
+      }
+    } catch (err) {
+      Alert.alert('Network Error', 'Could not reach server.');
+    }
+    setIsFpLoading(false);
+  };
 
   const handleGenerate = async () => {
     if (!idea || !audience || !problem) {
@@ -237,6 +544,313 @@ export default function App() {
     );
   }
 
+  // LOGIN SCREEN
+  if (activeView === 'login') {
+    const isLoginEnabled = !validateIdentifierStr(loginIdentifier) && loginPassword && loginPassword.length >= 8;
+    const pwdStrength = getPasswordStrengthScore(loginPassword);
+
+    return (
+      <ScrollView contentContainerStyle={styles.loginScrollContainer} style={{ backgroundColor: '#0a0a0f' }}>
+        <StatusBar style="light" />
+
+        {/* Header decoration orbs */}
+        <View style={styles.loginDecorContainer}>
+          <View style={[styles.loginOrb, { backgroundColor: '#8b5cf6', top: -100, right: -100, opacity: 0.15 }]} />
+          <View style={[styles.loginOrb, { backgroundColor: '#3b82f6', bottom: -100, left: -100, opacity: 0.15 }]} />
+        </View>
+
+        <View style={styles.loginCard}>
+          {/* Logo */}
+          <View style={styles.loginLogoContainer}>
+            <MaterialIcons name="camera" size={32} color="#a78bfa" />
+            <Text style={styles.loginLogoText}>VisionCraft<Text style={styles.loginLogoTextAI}>AI</Text></Text>
+          </View>
+
+          {/* Heading */}
+          <Text style={styles.loginTitleText}>Welcome Back</Text>
+          <Text style={styles.loginSubtitleText}>Sign in to continue using VisionCraft AI</Text>
+
+          {/* Error Summary */}
+          {!!loginErrorSummary ? (
+            <View style={styles.loginErrorSummary}>
+              <Text style={styles.loginErrorSummaryText}>{loginErrorSummary}</Text>
+            </View>
+          ) : null}
+
+          {/* Identifier Input */}
+          <View style={styles.loginInputGroup}>
+            <Text style={styles.loginInputLabel}>Email Address or Mobile Number</Text>
+            <View style={[styles.loginInputWrapper, !!identifierErr && { borderColor: '#ef4444' }]}>
+              <MaterialIcons name="person-outline" size={20} color="#64748b" style={styles.loginInputIcon} />
+              <TextInput
+                style={styles.loginTextInput}
+                placeholder="name@email.com or 10-digit mobile"
+                placeholderTextColor="rgba(255,255,255,0.25)"
+                value={loginIdentifier}
+                onChangeText={handleIdentifierChange}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+            </View>
+            {!!identifierErr ? <Text style={styles.loginErrorText}>{identifierErr}</Text> : null}
+          </View>
+
+          {/* Password Input */}
+          <View style={styles.loginInputGroup}>
+            <Text style={styles.loginInputLabel}>Password</Text>
+            <View style={[styles.loginInputWrapper, !!passwordErr && { borderColor: '#ef4444' }]}>
+              <MaterialIcons name="lock-outline" size={20} color="#64748b" style={styles.loginInputIcon} />
+              <TextInput
+                style={styles.loginTextInput}
+                placeholder="Enter your password"
+                placeholderTextColor="rgba(255,255,255,0.25)"
+                secureTextEntry={!showPassword}
+                value={loginPassword}
+                onChangeText={handlePasswordChange}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.loginPasswordToggle}>
+                <MaterialIcons name={showPassword ? "visibility-off" : "visibility"} size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Password strength indicators */}
+            {!!loginPassword ? (
+              <View style={styles.loginStrengthContainer}>
+                <View style={styles.loginStrengthBars}>
+                  <View style={[styles.loginStrengthBar, { backgroundColor: pwdStrength >= 1 ? (pwdStrength === 1 ? '#ef4444' : pwdStrength === 2 ? '#f59e0b' : '#10b981') : 'rgba(255,255,255,0.1)' }]} />
+                  <View style={[styles.loginStrengthBar, { backgroundColor: pwdStrength >= 2 ? (pwdStrength === 2 ? '#f59e0b' : '#10b981') : 'rgba(255,255,255,0.1)' }]} />
+                  <View style={[styles.loginStrengthBar, { backgroundColor: pwdStrength === 3 ? '#10b981' : 'rgba(255,255,255,0.1)' }]} />
+                </View>
+                <Text style={[styles.loginStrengthText, { color: pwdStrength === 1 ? '#ef4444' : pwdStrength === 2 ? '#f59e0b' : '#10b981' }]}>
+                  {pwdStrength === 1 ? 'Weak' : pwdStrength === 2 ? 'Medium' : 'Strong'}
+                </Text>
+              </View>
+            ) : null}
+            
+            {!!passwordErr ? <Text style={styles.loginErrorText}>{passwordErr}</Text> : null}
+          </View>
+
+          {/* Remember Me and Forgot Password Link */}
+          <View style={styles.loginOptionsRow}>
+            <TouchableOpacity style={styles.loginRememberRow} onPress={() => setRememberMe(!rememberMe)}>
+              <MaterialIcons 
+                name={rememberMe ? "check-box" : "check-box-outline-blank"} 
+                size={20} 
+                color={rememberMe ? "#8b5cf6" : "#64748b"} 
+              />
+              <Text style={styles.loginRememberText}>Remember me</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={openFpModal}>
+              <Text style={styles.loginForgotText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.loginBtnGroup}>
+            <TouchableOpacity 
+              style={[styles.loginBtnPrimary, !isLoginEnabled && { opacity: 0.5 }]} 
+              disabled={!isLoginEnabled || isLoginLoading}
+              onPress={handleLoginSubmit}
+            >
+              {isLoginLoading ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Text style={styles.loginBtnTextPrimary}>Login</Text>
+              )}
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.loginBtnSecondary}
+              onPress={() => Alert.alert('Register', 'Registration feature is coming soon!')}
+            >
+              <Text style={styles.loginBtnTextSecondary}>Create New Account</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* FORGOT PASSWORD MODAL OVERLAY */}
+        <Modal
+          animationType="fade"
+          transparent={true}
+          visible={showFp}
+          onRequestClose={() => setShowFp(false)}
+        >
+          <View style={styles.fpModalOverlay}>
+            <View style={styles.fpModalCard}>
+              {/* Close Modal button */}
+              <TouchableOpacity style={styles.fpModalClose} onPress={() => setShowFp(false)}>
+                <MaterialIcons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+
+              {/* STEP 1: Enter email or phone */}
+              {fpStep === 1 ? (
+                <View>
+                  <Text style={styles.fpModalTitle}>Reset Password</Text>
+                  <Text style={styles.fpModalSub}>Enter your registered email address or mobile number to receive a 6-digit OTP code.</Text>
+                  
+                  <View style={styles.loginInputGroup}>
+                    <Text style={styles.loginInputLabel}>Email or Mobile Number</Text>
+                    <View style={[styles.loginInputWrapper, !!fpIdentifierErr && { borderColor: '#ef4444' }]}>
+                      <MaterialIcons name="mail-outline" size={20} color="#64748b" style={styles.loginInputIcon} />
+                      <TextInput
+                        style={styles.loginTextInput}
+                        placeholder="name@email.com or 10-digit mobile"
+                        placeholderTextColor="rgba(255,255,255,0.25)"
+                        value={fpIdentifier}
+                        onChangeText={setFpIdentifier}
+                        autoCapitalize="none"
+                      />
+                    </View>
+                    {!!fpIdentifierErr ? <Text style={styles.loginErrorText}>{fpIdentifierErr}</Text> : null}
+                  </View>
+
+                  <TouchableOpacity 
+                    style={styles.loginBtnPrimary} 
+                    onPress={handleFpSendOtp}
+                    disabled={isFpLoading}
+                  >
+                    {isFpLoading ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <Text style={styles.loginBtnTextPrimary}>Send OTP</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              {/* STEP 2: Verify OTP */}
+              {fpStep === 2 ? (
+                <View>
+                  <Text style={styles.fpModalTitle}>Enter OTP Code</Text>
+                  <Text style={styles.fpModalSub}>A 6-digit verification code has been sent to your device. Enter it below to proceed.</Text>
+
+                  <View style={styles.loginInputGroup}>
+                    <Text style={styles.loginInputLabel}>6-Digit Verification Code</Text>
+                    <View style={styles.fpOtpContainer}>
+                      {fpOtp.map((digit, idx) => (
+                        <TextInput
+                          key={idx}
+                          ref={otpRefs[idx]}
+                          style={styles.fpOtpInput}
+                          maxLength={1}
+                          keyboardType="numeric"
+                          value={digit}
+                          onChangeText={(text) => handleFpOtpChange(text, idx)}
+                          onKeyPress={(e) => handleFpOtpKeyPress(e, idx)}
+                        />
+                      ))}
+                    </View>
+                    {!!fpOtpErr ? <Text style={styles.loginErrorText}>{fpOtpErr}</Text> : null}
+                  </View>
+
+                  <View style={styles.fpOtpResendRow}>
+                    {fpResendTimer > 0 ? (
+                      <Text style={styles.fpOtpTimer}>Resend OTP in {fpResendTimer}s</Text>
+                    ) : (
+                      <TouchableOpacity onPress={handleFpSendOtp}>
+                        <Text style={styles.fpResendLink}>Resend OTP Code</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  <TouchableOpacity 
+                    style={styles.loginBtnPrimary} 
+                    onPress={handleFpVerifyOtp}
+                    disabled={isFpLoading}
+                  >
+                    {isFpLoading ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <Text style={styles.loginBtnTextPrimary}>Verify Code</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              {/* STEP 3: Reset password entry */}
+              {fpStep === 3 ? (
+                <View>
+                  <Text style={styles.fpModalTitle}>Create New Password</Text>
+                  <Text style={styles.fpModalSub}>Enter your new password below. It must be at least 8 characters long.</Text>
+
+                  <View style={styles.loginInputGroup}>
+                    <Text style={styles.loginInputLabel}>New Password</Text>
+                    <View style={[styles.loginInputWrapper, !!fpNewPwdErr && { borderColor: '#ef4444' }]}>
+                      <TextInput
+                        style={[styles.loginTextInput, { paddingLeft: 16 }]}
+                        placeholder="Enter new password"
+                        placeholderTextColor="rgba(255,255,255,0.25)"
+                        secureTextEntry={true}
+                        value={fpNewPwd}
+                        onChangeText={setFpNewPwd}
+                        autoCapitalize="none"
+                      />
+                    </View>
+                    {!!fpNewPwdErr ? <Text style={styles.loginErrorText}>{fpNewPwdErr}</Text> : null}
+                  </View>
+
+                  <View style={styles.loginInputGroup}>
+                    <Text style={styles.loginInputLabel}>Confirm New Password</Text>
+                    <View style={[styles.loginInputWrapper, !!fpConfirmPwdErr && { borderColor: '#ef4444' }]}>
+                      <TextInput
+                        style={[styles.loginTextInput, { paddingLeft: 16 }]}
+                        placeholder="Confirm new password"
+                        placeholderTextColor="rgba(255,255,255,0.25)"
+                        secureTextEntry={true}
+                        value={fpConfirmPwd}
+                        onChangeText={setFpConfirmPwd}
+                        autoCapitalize="none"
+                      />
+                    </View>
+                    {!!fpConfirmPwdErr ? <Text style={styles.loginErrorText}>{fpConfirmPwdErr}</Text> : null}
+                  </View>
+
+                  <TouchableOpacity 
+                    style={styles.loginBtnPrimary} 
+                    onPress={handleFpResetPassword}
+                    disabled={isFpLoading}
+                  >
+                    {isFpLoading ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <Text style={styles.loginBtnTextPrimary}>Reset Password</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              {/* STEP 4: Success Message */}
+              {fpStep === 4 ? (
+                <View style={{ alignItems: 'center' }}>
+                  <View style={styles.fpSuccessIconBadge}>
+                    <MaterialIcons name="check" size={32} color="#10b981" />
+                  </View>
+                  <Text style={styles.fpModalTitle}>Password Updated!</Text>
+                  <Text style={[styles.fpModalSub, { textAlign: 'center', marginBottom: 24 }]}>
+                    Password changed successfully. Please login again.
+                  </Text>
+
+                  <TouchableOpacity 
+                    style={styles.loginBtnPrimary} 
+                    onPress={() => {
+                      setShowFp(false);
+                      setLoginIdentifier(fpIdentifier);
+                      setLoginPassword('');
+                    }}
+                  >
+                    <Text style={styles.loginBtnTextPrimary}>Back to Login</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+            </View>
+          </View>
+        </Modal>
+      </ScrollView>
+    );
+  }
+
   // DASHBOARD VIEW
   if (activeView === 'dashboard') {
     const totalCodeFiles = history.reduce((acc, item) => acc + (item.code?.files?.length || 0), 0);
@@ -248,8 +862,15 @@ export default function App() {
         
         {/* Dashboard Header */}
         <View style={styles.dashboardHeader}>
-          <Text style={styles.logo}>VisionCraft<Text style={styles.logoAI}>AI</Text></Text>
-          <Text style={styles.dashboardTagline}>Your Personal AI Incubator</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+            <View>
+              <Text style={styles.logo}>VisionCraft<Text style={styles.logoAI}>AI</Text></Text>
+              <Text style={styles.dashboardTagline}>Your Personal AI Incubator</Text>
+            </View>
+            <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} aria-label="Logout">
+              <MaterialIcons name="logout" size={22} color="#f43f5e" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Stats Grid */}
@@ -1364,5 +1985,269 @@ const styles = StyleSheet.create({
     color: '#c084fc',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  // MOBILE LOGIN STYLES
+  loginScrollContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 20,
+    position: 'relative',
+  },
+  loginDecorContainer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+    zIndex: 0,
+  },
+  loginOrb: {
+    position: 'absolute',
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+  },
+  loginCard: {
+    backgroundColor: 'rgba(17, 17, 34, 0.55)',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 24,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
+    zIndex: 1,
+  },
+  loginLogoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  loginLogoText: {
+    color: '#ffffff',
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  loginLogoTextAI: {
+    color: '#8b5cf6',
+  },
+  loginTitleText: {
+    color: '#ffffff',
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  loginSubtitleText: {
+    color: '#94a3b8',
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 28,
+  },
+  loginErrorSummary: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
+  },
+  loginErrorSummaryText: {
+    color: '#fca5a5',
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  loginInputGroup: {
+    marginBottom: 16,
+  },
+  loginInputLabel: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  loginInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 48,
+  },
+  loginInputIcon: {
+    marginRight: 8,
+  },
+  loginTextInput: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 14,
+  },
+  loginPasswordToggle: {
+    padding: 4,
+  },
+  loginStrengthContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  loginStrengthBars: {
+    flexDirection: 'row',
+    width: 80,
+    gap: 4,
+  },
+  loginStrengthBar: {
+    height: 4,
+    borderRadius: 2,
+    flex: 1,
+  },
+  loginStrengthText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  loginOptionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  loginRememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  loginRememberText: {
+    color: '#94a3b8',
+    fontSize: 13,
+    marginLeft: 6,
+  },
+  loginForgotText: {
+    color: '#3b82f6',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  loginBtnGroup: {
+    gap: 12,
+  },
+  loginBtnPrimary: {
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#8b5cf6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#8b5cf6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  loginBtnTextPrimary: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  loginBtnSecondary: {
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loginBtnTextSecondary: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  loginErrorText: {
+    color: '#ef4444',
+    fontSize: 11,
+    marginTop: 4,
+  },
+  fpModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(3, 3, 7, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  fpModalCard: {
+    backgroundColor: 'rgba(15, 15, 35, 0.95)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    position: 'relative',
+  },
+  fpModalClose: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    padding: 4,
+    zIndex: 10,
+  },
+  fpModalTitle: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  fpModalSub: {
+    color: '#94a3b8',
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  fpOtpContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 10,
+  },
+  fpOtpInput: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  fpOtpResendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 20,
+  },
+  fpOtpTimer: {
+    color: '#64748b',
+    fontSize: 12,
+  },
+  fpResendLink: {
+    color: '#3b82f6',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  fpSuccessIconBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: '#10b981',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  logoutBtn: {
+    padding: 8,
   },
 });
