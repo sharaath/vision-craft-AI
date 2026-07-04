@@ -6,6 +6,7 @@ import {
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as Updates from 'expo-updates';
 
 const DEFAULT_SERVER_URL = 'https://vision-craft-ai.onrender.com';
 
@@ -74,6 +75,30 @@ export default function App() {
       }
     };
     loadHistory();
+  }, []);
+
+  // Safe OTA Update Checker
+  useEffect(() => {
+    const checkForUpdates = async () => {
+      if (__DEV__) return;
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          Alert.alert(
+            'Update Available 🚀',
+            'A new version with the Project Hub is ready. Restart now to apply?',
+            [
+              { text: 'Later', style: 'cancel' },
+              { text: 'Restart Now', onPress: () => Updates.reloadAsync() }
+            ]
+          );
+        }
+      } catch (e) {
+        console.log('Update Check failed (dev client/simulator):', e);
+      }
+    };
+    checkForUpdates();
   }, []);
 
   // Cycle loading messages
