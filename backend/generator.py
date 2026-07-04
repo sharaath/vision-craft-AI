@@ -15,7 +15,8 @@ client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 SYSTEM_PROMPT = """
 You are the generation engine behind VisionCraftAI.
 
-Return ONLY valid JSON with the exact structure below:
+Return ONLY valid JSON with the exact structure below. 
+Keep all generated text, descriptions, and code files concise, clean, and high-quality to ensure extremely fast response times.
 
 {
   "name": "Name of the startup",
