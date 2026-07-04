@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useState, useEffect } from 'react';
 
-const DEFAULT_SERVER_URL = 'https://visioncraftai-varun-test.loca.lt';
+const DEFAULT_SERVER_URL = 'https://vision-craft-ai.onrender.com';
 
 const TEMPLATES = [
   {
