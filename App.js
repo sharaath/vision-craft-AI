@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useState } from 'react';
 
-const SERVER_URL = 'http://10.168.79.119:8000';
+const SERVER_URL = 'https://visioncraftai-varun-test.loca.lt';
 
 export default function App() {
   const [idea, setIdea] = useState('');
@@ -24,7 +24,10 @@ export default function App() {
     try {
       const response = await fetch(`${SERVER_URL}/api/generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true'
+        },
         body: JSON.stringify({ idea, audience, problem })
       });
       const result = await response.json();
@@ -254,14 +257,14 @@ const styles = StyleSheet.create({
   button: {
     backgroundColor: '#8b5cf6',
     borderRadius: 12,
-    padding: 18,
+    padding: 12,
     alignItems: 'center',
-    marginTop: 30,
-    marginBottom: 50,
+    marginTop: 20,
+    marginBottom: 40,
   },
   buttonText: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: 'bold',
   },
   // LOADING

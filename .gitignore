@@ -32,6 +32,17 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
+.env*
+backend/.env
+
+# python pycache
+__pycache__/
+*.pyc
+backend/__pycache__/
+
+# log files
+*.log
 
 # typescript
 *.tsbuildinfo
