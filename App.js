@@ -364,30 +364,72 @@ ${data.blueprint?.tech_stack}
         </View>
 
         {/* Content */}
-        <ScrollView style={styles.content}>
+        <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 60 }}>
 
           {/* BLUEPRINT TAB */}
           {activeTab === 'blueprint' && (
             <View style={{ marginBottom: 40 }}>
               <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionTitle}>🚀 Executive Summary</Text>
+                <Text style={styles.sectionTitle}>📊 Startup Blueprint Overview</Text>
                 <TouchableOpacity style={styles.actionBtn} onPress={() => handleShare(`${data.name} Blueprint`, fullBlueprintText)}>
                   <Text style={styles.actionBtnText}>Share All</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.sectionText}>{data.blueprint?.executive_summary}</Text>
 
-              <Text style={styles.sectionTitle}>❗ Problem</Text>
-              <Text style={styles.sectionText}>{data.blueprint?.problem_analysis}</Text>
+              {/* Card 1: Executive Summary */}
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionCardHeader}>
+                  <View style={[styles.sectionIconBadge, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
+                    <Text style={styles.sectionIconText}>🚀</Text>
+                  </View>
+                  <Text style={styles.sectionCardTitle}>Executive Summary</Text>
+                </View>
+                <Text style={styles.sectionText}>{data.blueprint?.executive_summary}</Text>
+              </View>
 
-              <Text style={styles.sectionTitle}>✅ Solution</Text>
-              <Text style={styles.sectionText}>{data.blueprint?.solution_overview}</Text>
+              {/* Card 2: Problem */}
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionCardHeader}>
+                  <View style={[styles.sectionIconBadge, { backgroundColor: 'rgba(244, 63, 94, 0.15)' }]}>
+                    <Text style={styles.sectionIconText}>❗</Text>
+                  </View>
+                  <Text style={styles.sectionCardTitle}>The Problem</Text>
+                </View>
+                <Text style={styles.sectionText}>{data.blueprint?.problem_analysis}</Text>
+              </View>
 
-              <Text style={styles.sectionTitle}>💰 Revenue Model</Text>
-              <Text style={styles.sectionText}>{data.blueprint?.revenue_model}</Text>
+              {/* Card 3: Solution */}
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionCardHeader}>
+                  <View style={[styles.sectionIconBadge, { backgroundColor: 'rgba(74, 222, 128, 0.15)' }]}>
+                    <Text style={styles.sectionIconText}>✅</Text>
+                  </View>
+                  <Text style={styles.sectionCardTitle}>Our Solution</Text>
+                </View>
+                <Text style={styles.sectionText}>{data.blueprint?.solution_overview}</Text>
+              </View>
 
-              <Text style={styles.sectionTitle}>⚙️ Tech Stack</Text>
-              <Text style={styles.sectionText}>{data.blueprint?.tech_stack}</Text>
+              {/* Card 4: Revenue Model */}
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionCardHeader}>
+                  <View style={[styles.sectionIconBadge, { backgroundColor: 'rgba(234, 179, 8, 0.15)' }]}>
+                    <Text style={styles.sectionIconText}>💰</Text>
+                  </View>
+                  <Text style={styles.sectionCardTitle}>Revenue Model</Text>
+                </View>
+                <Text style={styles.sectionText}>{data.blueprint?.revenue_model}</Text>
+              </View>
+
+              {/* Card 5: Tech Stack */}
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionCardHeader}>
+                  <View style={[styles.sectionIconBadge, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
+                    <Text style={styles.sectionIconText}>⚙️</Text>
+                  </View>
+                  <Text style={styles.sectionCardTitle}>Recommended Tech Stack</Text>
+                </View>
+                <Text style={styles.sectionText}>{data.blueprint?.tech_stack}</Text>
+              </View>
             </View>
           )}
 
@@ -403,7 +445,12 @@ ${data.blueprint?.tech_stack}
                   return (
                     <View key={index} style={styles.codeCard}>
                       <View style={styles.cardHeader}>
-                        <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
+                        <View style={styles.sectionCardHeader}>
+                          <View style={[styles.sectionIconBadge, { backgroundColor: 'rgba(139, 92, 246, 0.15)', marginRight: 10 }]}>
+                            <Text style={styles.sectionIconText}>📄</Text>
+                          </View>
+                          <Text style={styles.fileName} numberOfLines={1}>{file.name}</Text>
+                        </View>
                         <View style={styles.actionRow}>
                           <TouchableOpacity style={styles.actionBtn} onPress={() => handleShare(file.name, file.content)}>
                             <Text style={styles.actionBtnText}>Share</Text>
@@ -433,7 +480,12 @@ ${data.blueprint?.tech_stack}
                 data.advisor?.deck?.map((item, index) => (
                   <View key={index} style={styles.advisorCard}>
                     <View style={styles.cardHeader}>
-                      <Text style={styles.advisorTitle} numberOfLines={1}>{item.title}</Text>
+                      <View style={styles.sectionCardHeader}>
+                        <View style={[styles.sectionIconBadge, { backgroundColor: 'rgba(167, 139, 250, 0.15)', marginRight: 10 }]}>
+                          <Text style={styles.sectionIconText}>📊</Text>
+                        </View>
+                        <Text style={styles.advisorTitle} numberOfLines={1}>{item.title}</Text>
+                      </View>
                       <TouchableOpacity style={styles.actionBtn} onPress={() => handleShare(item.title, item.content)}>
                         <Text style={styles.actionBtnText}>Share</Text>
                       </TouchableOpacity>
@@ -457,7 +509,12 @@ ${data.blueprint?.tech_stack}
                   return (
                     <View key={index} style={styles.postCard}>
                       <View style={styles.cardHeader}>
-                        <Text style={styles.postPlatform}>{post.platform}</Text>
+                        <View style={styles.sectionCardHeader}>
+                          <View style={[styles.sectionIconBadge, { backgroundColor: 'rgba(236, 72, 153, 0.15)', marginRight: 10 }]}>
+                            <Text style={styles.sectionIconText}>📣</Text>
+                          </View>
+                          <Text style={styles.postPlatform}>{post.platform}</Text>
+                        </View>
                         <View style={styles.actionRow}>
                           <TouchableOpacity style={styles.actionBtn} onPress={() => handleShare(`${post.platform} Post`, post.content)}>
                             <Text style={styles.actionBtnText}>Share</Text>
@@ -1087,5 +1144,34 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 14,
+  },
+  // SECTION CARDS (RESULTS SCREEN)
+  sectionCard: {
+    backgroundColor: '#111122',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#1e1b4b',
+  },
+  sectionCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sectionIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  sectionIconText: {
+    fontSize: 16,
+  },
+  sectionCardTitle: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
