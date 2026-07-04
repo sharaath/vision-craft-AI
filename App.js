@@ -300,7 +300,11 @@ export default function App() {
             <Text style={styles.fabText}>+ Craft New</Text>
           </TouchableOpacity>
         )}
-   // PROJECT HUB SCREEN
+      </View>
+    );
+  }
+
+  // PROJECT HUB SCREEN
   if (activeView === 'project_hub' && data) {
     const codeFilesCount = data.code?.files?.length || 0;
     const advisorSlidesCount = data.advisor?.deck?.length || 0;
