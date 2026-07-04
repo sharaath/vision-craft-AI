@@ -833,15 +833,15 @@ export default function App() {
                     {!!fpOtpErr ? <Text style={styles.loginErrorText}>{fpOtpErr}</Text> : null}
                   </View>
 
-                  <View style={styles.fpOtpResendRow}>
-                    {fpResendTimer > 0 ? (
-                      <Text style={styles.fpOtpTimer}>Resend OTP in {fpResendTimer}s</Text>
-                    ) : (
-                      <TouchableOpacity onPress={handleFpSendOtp}>
-                        <Text style={styles.fpResendLink}>Resend OTP Code</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                  <TouchableOpacity 
+                    style={[styles.fpResendBtn, fpResendTimer > 0 && styles.fpResendBtnDisabled]}
+                    onPress={handleFpSendOtp}
+                    disabled={fpResendTimer > 0}
+                  >
+                    <Text style={[styles.fpResendBtnText, fpResendTimer > 0 && styles.fpResendBtnTextDisabled]}>
+                      {fpResendTimer > 0 ? `Resend Code (${fpResendTimer}s)` : "Resend Code"}
+                    </Text>
+                  </TouchableOpacity>
 
                   <TouchableOpacity 
                     style={styles.loginBtnPrimary} 
@@ -2435,21 +2435,29 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
   },
-  fpOtpResendRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  fpResendBtn: {
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
-    marginTop: 12,
+    justifyContent: 'center',
+    marginTop: 8,
     marginBottom: 20,
   },
-  fpOtpTimer: {
-    color: '#64748b',
-    fontSize: 12,
+  fpResendBtnDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    opacity: 0.6,
   },
-  fpResendLink: {
+  fpResendBtnText: {
     color: '#3b82f6',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
+  },
+  fpResendBtnTextDisabled: {
+    color: '#64748b',
   },
   fpSuccessIconBadge: {
     width: 56,
