@@ -4,6 +4,8 @@ import {
   ScrollView, ActivityIndicator, Alert, Share
 } from 'react-native';
 import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MaterialIcons } from '@expo/vector-icons';
 
 const DEFAULT_SERVER_URL = 'https://vision-craft-ai.onrender.com';
 
@@ -54,6 +56,25 @@ export default function App() {
   const [collapsedFiles, setCollapsedFiles] = useState({});
   const [collapsedPosts, setCollapsedPosts] = useState({});
 
+  // Dashboard and history states
+  const [history, setHistory] = useState([]);
+  const [activeView, setActiveView] = useState('dashboard'); // dashboard, wizard, loading, results
+
+  // Load history from AsyncStorage on startup
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('VISIONCRAFTAI_HISTORY');
+        if (stored) {
+          setHistory(JSON.parse(stored));
+        }
+      } catch (e) {
+        console.error('Failed to load history', e);
+      }
+    };
+    loadHistory();
+  }, []);
+
   // Cycle loading messages
   useEffect(() => {
     let interval;
@@ -84,15 +105,31 @@ export default function App() {
       });
       const result = await response.json();
       if (response.ok) {
-        setData(result);
+        const newStartup = {
+          id: Date.now().toString(),
+          createdAt: new Date().toLocaleDateString(),
+          ...result
+        };
+        setData(newStartup);
+
+        // Save to history
+        const updatedHistory = [newStartup, ...history];
+        setHistory(updatedHistory);
+        try {
+          await AsyncStorage.setItem('VISIONCRAFTAI_HISTORY', JSON.stringify(updatedHistory));
+        } catch (e) {
+          console.error("Failed to save history", e);
+        }
+
         // By default, collapse files but keep first one open for readability
         const initialCollapsed = {};
-        if (result.code?.files) {
-          result.code.files.forEach((_, idx) => {
+        if (newStartup.code?.files) {
+          newStartup.code.files.forEach((_, idx) => {
             initialCollapsed[idx] = idx !== 0; // Collapsed if not the first file
           });
         }
         setCollapsedFiles(initialCollapsed);
+        setActiveView('results');
       } else {
         Alert.alert('Generation Error', result.error || 'Failed to generate startup blueprint.');
       }
@@ -111,6 +148,7 @@ export default function App() {
     setActiveTab('blueprint');
     setCollapsedFiles({});
     setCollapsedPosts({});
+    setActiveView('wizard');
   };
 
   const selectTemplate = (tpl) => {
@@ -138,6 +176,29 @@ export default function App() {
     setCollapsedPosts(prev => ({ ...prev, [index]: !prev[index] }));
   };
 
+  const deleteStartup = async (id) => {
+    Alert.alert(
+      "Delete Startup",
+      "Are you sure you want to delete this startup blueprint?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            const updatedHistory = history.filter(item => item.id !== id);
+            setHistory(updatedHistory);
+            try {
+              await AsyncStorage.setItem('VISIONCRAFTAI_HISTORY', JSON.stringify(updatedHistory));
+            } catch (e) {
+              console.error("Failed to delete startup", e);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   // LOADING SCREEN
   if (loading) {
     return (
@@ -150,8 +211,100 @@ export default function App() {
     );
   }
 
+  // DASHBOARD VIEW
+  if (activeView === 'dashboard') {
+    const totalCodeFiles = history.reduce((acc, item) => acc + (item.code?.files?.length || 0), 0);
+    const totalMarketingPosts = history.reduce((acc, item) => acc + (item.marketing?.posts?.length || 0), 0);
+
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0a0a0f' }}>
+        <StatusBar style="light" />
+        
+        {/* Dashboard Header */}
+        <View style={styles.dashboardHeader}>
+          <Text style={styles.logo}>VisionCraft<Text style={styles.logoAI}>AI</Text></Text>
+          <Text style={styles.dashboardTagline}>Your Personal AI Incubator</Text>
+        </View>
+
+        {/* Stats Grid */}
+        <View style={styles.statsGrid}>
+          <View style={styles.statBox}>
+            <Text style={styles.statVal}>{history.length}</Text>
+            <Text style={styles.statLabel}>🚀 Startups</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statVal}>{totalCodeFiles}</Text>
+            <Text style={styles.statLabel}>💻 Code Files</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statVal}>{totalMarketingPosts}</Text>
+            <Text style={styles.statLabel}>📣 Posts</Text>
+          </View>
+        </View>
+
+        {/* Recent Startups or Empty State */}
+        <ScrollView style={styles.historyScroll} contentContainerStyle={{ paddingBottom: 100 }}>
+          <Text style={styles.historyTitle}>📂 Saved Blueprints</Text>
+          {history.length === 0 ? (
+            <View style={styles.dashboardEmptyState}>
+              <Text style={styles.dashboardEmptyIcon}>💡</Text>
+              <Text style={styles.dashboardEmptyText}>No startup blueprints crafted yet.</Text>
+              <Text style={styles.dashboardEmptySub}>Your generated ideas, business plans, code, and marketing assets will appear here.</Text>
+              <TouchableOpacity 
+                style={styles.dashboardEmptyBtn} 
+                onPress={() => setActiveView('wizard')}
+              >
+                <Text style={styles.dashboardEmptyBtnText}>🚀 Craft Your First Startup</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            history.map((item) => (
+              <View key={item.id} style={styles.historyCard}>
+                <TouchableOpacity 
+                  style={{ flex: 1 }} 
+                  onPress={() => {
+                    setData(item);
+                    setActiveView('results');
+                  }}
+                >
+                  <Text style={styles.historyCardName} numberOfLines={1}>{item.name}</Text>
+                  <Text style={styles.historyCardDate}>{item.createdAt || 'Generated'}</Text>
+                  <Text style={styles.historyCardSummary} numberOfLines={2}>
+                    {item.blueprint?.executive_summary || 'No summary available.'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.historyDeleteBtn}
+                  onPress={() => deleteStartup(item.id)}
+                >
+                  <MaterialIcons name="delete-outline" size={22} color="#f43f5e" />
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+        </ScrollView>
+
+        {/* Create Startup FAB */}
+        {history.length > 0 && (
+          <TouchableOpacity 
+            style={styles.fab} 
+            onPress={() => {
+              setData(null);
+              setIdea('');
+              setAudience('');
+              setProblem('');
+              setActiveView('wizard');
+            }}
+          >
+            <Text style={styles.fabText}>+ Craft New</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  }
+
   // RESULTS SCREEN
-  if (data) {
+  if (activeView === 'results' && data) {
     const tabs = [
       { key: 'blueprint', label: '📋 Blueprint' },
       { key: 'code', label: '💻 Code' },
@@ -182,8 +335,11 @@ ${data.blueprint?.tech_stack}
 
         {/* Header */}
         <View style={styles.resultsHeader}>
-          <View style={{ flex: 1, marginRight: 10 }}>
-            <Text style={styles.startupName}>{data.name}</Text>
+          <TouchableOpacity onPress={() => setActiveView('dashboard')} style={styles.backBtn}>
+            <Text style={styles.backBtnText}>← Dashboard</Text>
+          </TouchableOpacity>
+          <View style={{ flex: 1, marginHorizontal: 10 }}>
+            <Text style={styles.startupName} numberOfLines={1}>{data.name}</Text>
           </View>
           <TouchableOpacity onPress={handleRestart} style={styles.restartBtn}>
             <Text style={styles.restartText}>+ New</Text>
@@ -327,91 +483,99 @@ ${data.blueprint?.tech_stack}
   }
 
   // WIZARD SCREEN
-  return (
-    <ScrollView style={styles.container}>
-      <StatusBar style="light" />
+  if (activeView === 'wizard') {
+    return (
+      <ScrollView style={styles.container}>
+        <StatusBar style="light" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.logo}>VisionCraft<Text style={styles.logoAI}>AI</Text></Text>
-        <Text style={styles.tagline}>Transform Your Idea Into a Real Startup</Text>
-      </View>
+        {/* Wizard Header */}
+        <View style={styles.wizardHeader}>
+          <TouchableOpacity onPress={() => setActiveView('dashboard')} style={styles.backBtn}>
+            <Text style={styles.backBtnText}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.wizardHeaderText}>Craft Startup</Text>
+          <View style={{ width: 60 }} />
+        </View>
 
-      {/* Templates Panel */}
-      <View style={styles.templatesSection}>
-        <Text style={styles.templatesTitle}>💡 Quick Try Templates</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.templatesContainer}>
-          {TEMPLATES.map((tpl, index) => (
-            <TouchableOpacity key={index} style={styles.templateCard} onPress={() => selectTemplate(tpl)}>
-              <Text style={styles.templateText}>{tpl.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+        {/* Templates Panel */}
+        <View style={styles.templatesSection}>
+          <Text style={styles.templatesTitle}>💡 Quick Try Templates</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.templatesContainer}>
+            {TEMPLATES.map((tpl, index) => (
+              <TouchableOpacity key={index} style={styles.templateCard} onPress={() => selectTemplate(tpl)}>
+                <Text style={tpl.label === idea ? styles.templateText : styles.templateText}>{tpl.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
 
-      {/* Form */}
-      <View style={styles.form}>
-        <Text style={styles.label}>💡 Startup Idea</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. An AI fitness coach app..."
-          placeholderTextColor="#555"
-          value={idea}
-          onChangeText={setIdea}
-          multiline
-        />
+        {/* Form */}
+        <View style={styles.form}>
+          <Text style={styles.label}>💡 Startup Idea</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. An AI fitness coach app..."
+            placeholderTextColor="#555"
+            value={idea}
+            onChangeText={setIdea}
+            multiline
+          />
 
-        <Text style={styles.label}>👥 Target Audience</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. Busy professionals aged 25-40..."
-          placeholderTextColor="#555"
-          value={audience}
-          onChangeText={setAudience}
-        />
+          <Text style={styles.label}>👥 Target Audience</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. Busy professionals aged 25-40..."
+            placeholderTextColor="#555"
+            value={audience}
+            onChangeText={setAudience}
+          />
 
-        <Text style={styles.label}>❗ Problem Statement</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. People don't know if they exercise correctly..."
-          placeholderTextColor="#555"
-          value={problem}
-          onChangeText={setProblem}
-        />
+          <Text style={styles.label}>❗ Problem Statement</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. People don't know if they exercise correctly..."
+            placeholderTextColor="#555"
+            value={problem}
+            onChangeText={setProblem}
+          />
 
-        <TouchableOpacity style={styles.button} onPress={handleGenerate}>
-          <Text style={styles.buttonText}>🚀 Craft Startup Blueprint</Text>
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.button} onPress={handleGenerate}>
+            <Text style={styles.buttonText}>🚀 Craft Startup Blueprint</Text>
+          </TouchableOpacity>
 
-        {/* Settings Toggle */}
-        <TouchableOpacity 
-          style={styles.settingsToggleBtn} 
-          onPress={() => setShowSettings(!showSettings)}
-        >
-          <Text style={styles.settingsToggleText}>
-            {showSettings ? "⚙️ Hide API Settings" : "⚙️ Configure API Server"}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Settings Panel */}
-        {showSettings && (
-          <View style={styles.settingsContainer}>
-            <Text style={styles.settingsLabel}>Backend API Server URL</Text>
-            <TextInput
-              style={styles.settingsInput}
-              value={serverUrl}
-              onChangeText={setServerUrl}
-              placeholder="e.g. http://localhost:8000"
-              placeholderTextColor="#555"
-            />
-            <Text style={styles.settingsDesc}>
-              Using localtunnel? Use the tunnel URL. Using local environment? Use your computer's IP (e.g. http://192.168.1.5:8000).
+          {/* Settings Toggle */}
+          <TouchableOpacity 
+            style={styles.settingsToggleBtn} 
+            onPress={() => setShowSettings(!showSettings)}
+          >
+            <Text style={styles.settingsToggleText}>
+              {showSettings ? "⚙️ Hide API Settings" : "⚙️ Configure API Server"}
             </Text>
-          </View>
-        )}
-      </View>
-    </ScrollView>
-  );
+          </TouchableOpacity>
+
+          {/* Settings Panel */}
+          {showSettings && (
+            <View style={styles.settingsContainer}>
+              <Text style={styles.settingsLabel}>Backend API Server URL</Text>
+              <TextInput
+                style={styles.settingsInput}
+                value={serverUrl}
+                onChangeText={setServerUrl}
+                placeholder="e.g. http://localhost:8000"
+                placeholderTextColor="#555"
+              />
+              <Text style={styles.settingsDesc}>
+                Using localtunnel? Use the tunnel URL. Using local environment? Use your computer's IP (e.g. http://192.168.1.5:8000).
+              </Text>
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    );
+  }
+
+  // Fallback
+  return null;
 }
 
 const styles = StyleSheet.create({
@@ -753,5 +917,175 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     marginTop: 8,
+  },
+  // WIZARD HEADER
+  wizardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    backgroundColor: '#0a0a0f',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e1b4b',
+  },
+  wizardHeaderText: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+    marginRight: 40, // offset back button to center text
+  },
+  backBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#1e1b4b',
+  },
+  backBtnText: {
+    color: '#c084fc',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  // DASHBOARD
+  dashboardHeader: {
+    paddingTop: 70,
+    paddingBottom: 20,
+    alignItems: 'center',
+    backgroundColor: '#0a0a0f',
+  },
+  dashboardTagline: {
+    color: '#94a3b8',
+    fontSize: 13,
+    marginTop: 4,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  statBox: {
+    flex: 1,
+    backgroundColor: '#111122',
+    borderWidth: 1,
+    borderColor: '#1e1b4b',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginHorizontal: 4,
+  },
+  statVal: {
+    color: '#a78bfa',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  statLabel: {
+    color: '#64748b',
+    fontSize: 10,
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  historyScroll: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  historyTitle: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  historyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#111122',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#1e1b4b',
+  },
+  historyCardName: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  historyCardDate: {
+    color: '#64748b',
+    fontSize: 11,
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  historyCardSummary: {
+    color: '#94a3b8',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  historyDeleteBtn: {
+    padding: 8,
+    marginLeft: 10,
+  },
+  // EMPTY STATE
+  dashboardEmptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+    backgroundColor: '#111122',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#1e1b4b',
+    marginTop: 10,
+  },
+  dashboardEmptyIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  dashboardEmptyText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  dashboardEmptySub: {
+    color: '#64748b',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  dashboardEmptyBtn: {
+    backgroundColor: '#8b5cf6',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  dashboardEmptyBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  // FAB
+  fab: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    backgroundColor: '#8b5cf6',
+    borderRadius: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    shadowColor: '#8b5cf6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  fabText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
 });
