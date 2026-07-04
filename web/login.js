@@ -22,6 +22,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const identifierError = document.getElementById('identifier-error');
   const passwordError = document.getElementById('password-error');
 
+  // DOM Elements - Register Modal
+  const registerBtn = document.getElementById('register-btn');
+  const registerModal = document.getElementById('register-modal');
+  const closeRegisterModalBtn = document.getElementById('close-register-modal');
+  const regNameInput = document.getElementById('reg-name');
+  const regEmailInput = document.getElementById('reg-email');
+  const regMobileInput = document.getElementById('reg-mobile');
+  const regPasswordInput = document.getElementById('reg-password');
+  const regNameError = document.getElementById('reg-name-error');
+  const regEmailError = document.getElementById('reg-email-error');
+  const regMobileError = document.getElementById('reg-mobile-error');
+  const regPasswordError = document.getElementById('reg-password-error');
+  const regSubmitBtn = document.getElementById('reg-submit-btn');
+  const regSpinner = document.getElementById('reg-spinner');
+  const regStepForm = document.getElementById('reg-step-form');
+  const regStepSuccess = document.getElementById('reg-step-success');
+  const regLoginRedirectBtn = document.getElementById('reg-login-redirect');
+
   // DOM Elements - Forgot Password Modal
   const forgotLink = document.getElementById('forgot-password-link');
   const forgotModal = document.getElementById('forgot-modal');
@@ -208,6 +226,17 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error('User not found.');
       }
       return { success: true, token: 'mock-jwt-token-abcdef123456' };
+    }
+
+    if (endpoint === '/api/register') {
+      const { name, email, mobile, password } = payload;
+      if (!name || !email || !mobile || !password) {
+        throw new Error('All fields are required.');
+      }
+      if (email.includes('fail') || mobile.includes('fail')) {
+        throw new Error('Registration failed. Email or Mobile already exists.');
+      }
+      return { success: true, message: 'Account created successfully' };
     }
 
     if (endpoint === '/api/send-otp') {
@@ -540,6 +569,128 @@ document.addEventListener('DOMContentLoaded', () => {
     forgotModal.classList.add('hidden');
     // Autofill identifier input with updated ID for convenience
     identifierInput.value = activeFpIdentifier;
+    validateField(identifierInput, validateIdentifier, identifierError);
+    passwordInput.value = '';
+    passwordInput.focus();
+  });
+
+  // -----------------------------------------------------------
+  // 8. Register Modal Flow
+  // -----------------------------------------------------------
+  
+  // Show Register Modal
+  registerBtn.addEventListener('click', () => {
+    registerModal.classList.remove('hidden');
+    resetRegModalState();
+  });
+
+  // Hide Register Modal
+  closeRegisterModalBtn.addEventListener('click', () => {
+    registerModal.classList.add('hidden');
+  });
+
+  // Close Register Modal on clicking outside
+  registerModal.addEventListener('click', (e) => {
+    if (e.target === registerModal) {
+      registerModal.classList.add('hidden');
+    }
+  });
+
+  function resetRegModalState() {
+    regStepForm.classList.remove('hidden');
+    regStepSuccess.classList.add('hidden');
+    
+    regNameInput.value = '';
+    regEmailInput.value = '';
+    regMobileInput.value = '';
+    regPasswordInput.value = '';
+    
+    regNameError.textContent = '';
+    regEmailError.textContent = '';
+    regMobileError.textContent = '';
+    regPasswordError.textContent = '';
+    
+    regNameInput.classList.remove('error');
+    regEmailInput.classList.remove('error');
+    regMobileInput.classList.remove('error');
+    regPasswordInput.classList.remove('error');
+  }
+
+  // Register Form Submit
+  regSubmitBtn.addEventListener('click', async () => {
+    let isValid = true;
+
+    // Validate Name
+    if (!regNameInput.value.trim()) {
+      regNameError.textContent = 'Full name is required.';
+      regNameInput.classList.add('error');
+      isValid = false;
+    } else {
+      regNameError.textContent = '';
+      regNameInput.classList.remove('error');
+    }
+
+    // Validate Email
+    if (!emailRegex.test(regEmailInput.value.trim())) {
+      regEmailError.textContent = 'Please enter a valid email address.';
+      regEmailInput.classList.add('error');
+      isValid = false;
+    } else {
+      regEmailError.textContent = '';
+      regEmailInput.classList.remove('error');
+    }
+
+    // Validate Mobile
+    if (!mobileRegex.test(regMobileInput.value.trim())) {
+      regMobileError.textContent = 'Mobile number must be exactly 10 digits.';
+      regMobileInput.classList.add('error');
+      isValid = false;
+    } else {
+      regMobileError.textContent = '';
+      regMobileInput.classList.remove('error');
+    }
+
+    // Validate Password
+    if (regPasswordInput.value.length < 8) {
+      regPasswordError.textContent = 'Password must be at least 8 characters.';
+      regPasswordInput.classList.add('error');
+      isValid = false;
+    } else {
+      regPasswordError.textContent = '';
+      regPasswordInput.classList.remove('error');
+    }
+
+    if (!isValid) return;
+
+    regSubmitBtn.disabled = true;
+    regSpinner.classList.remove('hidden');
+    regSubmitBtn.querySelector('.btn-text').style.opacity = 0;
+
+    const payload = {
+      name: regNameInput.value.trim(),
+      email: regEmailInput.value.trim(),
+      mobile: regMobileInput.value.trim(),
+      password: regPasswordInput.value
+    };
+
+    try {
+      await apiCall('/api/register', payload);
+      regStepForm.classList.add('hidden');
+      regStepSuccess.classList.remove('hidden');
+    } catch (err) {
+      regEmailError.textContent = err.message;
+      regEmailInput.classList.add('error');
+    } finally {
+      regSubmitBtn.disabled = false;
+      regSpinner.classList.add('hidden');
+      regSubmitBtn.querySelector('.btn-text').style.opacity = 1;
+    }
+  });
+
+  // Redirect to Login from Register Success
+  regLoginRedirectBtn.addEventListener('click', () => {
+    registerModal.classList.add('hidden');
+    identifierInput.value = regEmailInput.value;
     validateField(identifierInput, validateIdentifier, identifierError);
     passwordInput.value = '';
     passwordInput.focus();

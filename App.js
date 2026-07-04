@@ -86,6 +86,19 @@ export default function App() {
   const [isFpLoading, setIsFpLoading] = useState(false);
   const [fpResendTimer, setFpResendTimer] = useState(0);
 
+  // Mobile Registration states
+  const [showReg, setShowReg] = useState(false);
+  const [regStep, setRegStep] = useState(1); // 1 = Form, 2 = Success
+  const [regName, setRegName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regMobile, setRegMobile] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regNameErr, setRegNameErr] = useState('');
+  const [regEmailErr, setRegEmailErr] = useState('');
+  const [regMobileErr, setRegMobileErr] = useState('');
+  const [regPasswordErr, setRegPasswordErr] = useState('');
+  const [isRegLoading, setIsRegLoading] = useState(false);
+
   // Refs for OTP input boxes focus shifting
   const otpRefs = [
     useRef(null),
@@ -161,6 +174,82 @@ export default function App() {
     }
     return () => clearInterval(interval);
   }, [loading]);
+
+  // -----------------------------------------------------------
+  // Mobile Registration Flow Handlers
+  // -----------------------------------------------------------
+  const openRegModal = () => {
+    setRegName('');
+    setRegEmail('');
+    setRegMobile('');
+    setRegPassword('');
+    setRegNameErr('');
+    setRegEmailErr('');
+    setRegMobileErr('');
+    setRegPasswordErr('');
+    setRegStep(1);
+    setShowReg(true);
+  };
+
+  const handleRegSubmit = async () => {
+    let isValid = true;
+
+    if (!regName.trim()) {
+      setRegNameErr('Full name is required.');
+      isValid = false;
+    } else {
+      setRegNameErr('');
+    }
+
+    if (!emailRegex.test(regEmail.trim())) {
+      setRegEmailErr('Please enter a valid email address.');
+      isValid = false;
+    } else {
+      setRegEmailErr('');
+    }
+
+    if (regMobile.trim().length !== 10 || !/^[0-9]+$/.test(regMobile.trim())) {
+      setRegMobileErr('Mobile number must be exactly 10 digits.');
+      isValid = false;
+    } else {
+      setRegMobileErr('');
+    }
+
+    if (regPassword.length < 8) {
+      setRegPasswordErr('Password must be at least 8 characters.');
+      isValid = false;
+    } else {
+      setRegPasswordErr('');
+    }
+
+    if (!isValid) return;
+    setIsRegLoading(true);
+
+    try {
+      const response = await fetch(`${serverUrl.trim()}/api/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true'
+        },
+        body: JSON.stringify({
+          name: regName.trim(),
+          email: regEmail.trim(),
+          mobile: regMobile.trim(),
+          password: regPassword
+        })
+      });
+      const result = await response.json();
+      if (response.ok) {
+        setRegStep(2);
+      } else {
+        setRegEmailErr(result.error || 'Registration failed.');
+      }
+    } catch (err) {
+      Alert.alert('Network Error', 'Could not reach server.');
+    }
+    setIsRegLoading(false);
+  };
 
   // -----------------------------------------------------------
   // Mobile Login Validation & Handlers
@@ -662,7 +751,7 @@ export default function App() {
             
             <TouchableOpacity 
               style={styles.loginBtnSecondary}
-              onPress={() => Alert.alert('Register', 'Registration feature is coming soon!')}
+              onPress={openRegModal}
             >
               <Text style={styles.loginBtnTextSecondary}>Create New Account</Text>
             </TouchableOpacity>
@@ -844,6 +933,132 @@ export default function App() {
                 </View>
               ) : null}
 
+            </View>
+          </View>
+        </Modal>
+
+        {/* REGISTER MODAL OVERLAY */}
+        <Modal
+          animationType="fade"
+          transparent={true}
+          visible={showReg}
+          onRequestClose={() => setShowReg(false)}
+        >
+          <View style={styles.fpModalOverlay}>
+            <View style={styles.fpModalCard}>
+              {/* Close Modal button */}
+              <TouchableOpacity style={styles.fpModalClose} onPress={() => setShowReg(false)}>
+                <MaterialIcons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+
+              {regStep === 1 ? (
+                <View>
+                  <Text style={styles.fpModalTitle}>Create Account</Text>
+                  <Text style={styles.fpModalSub}>Join VisionCraft AI to start generating high-quality startup blueprints.</Text>
+
+                  {/* Name field */}
+                  <View style={styles.loginInputGroup}>
+                    <Text style={styles.loginInputLabel}>Full Name</Text>
+                    <View style={[styles.loginInputWrapper, !!regNameErr && { borderColor: '#ef4444' }]}>
+                      <MaterialIcons name="person-outline" size={20} color="#64748b" style={styles.loginInputIcon} />
+                      <TextInput
+                        style={styles.loginTextInput}
+                        placeholder="John Doe"
+                        placeholderTextColor="rgba(255,255,255,0.25)"
+                        value={regName}
+                        onChangeText={setRegName}
+                      />
+                    </View>
+                    {!!regNameErr ? <Text style={styles.loginErrorText}>{regNameErr}</Text> : null}
+                  </View>
+
+                  {/* Email field */}
+                  <View style={styles.loginInputGroup}>
+                    <Text style={styles.loginInputLabel}>Email Address</Text>
+                    <View style={[styles.loginInputWrapper, !!regEmailErr && { borderColor: '#ef4444' }]}>
+                      <MaterialIcons name="mail-outline" size={20} color="#64748b" style={styles.loginInputIcon} />
+                      <TextInput
+                        style={styles.loginTextInput}
+                        placeholder="name@email.com"
+                        placeholderTextColor="rgba(255,255,255,0.25)"
+                        value={regEmail}
+                        onChangeText={setRegEmail}
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                      />
+                    </View>
+                    {!!regEmailErr ? <Text style={styles.loginErrorText}>{regEmailErr}</Text> : null}
+                  </View>
+
+                  {/* Mobile field */}
+                  <View style={styles.loginInputGroup}>
+                    <Text style={styles.loginInputLabel}>Mobile Number</Text>
+                    <View style={[styles.loginInputWrapper, !!regMobileErr && { borderColor: '#ef4444' }]}>
+                      <MaterialIcons name="phone-iphone" size={20} color="#64748b" style={styles.loginInputIcon} />
+                      <TextInput
+                        style={styles.loginTextInput}
+                        placeholder="10-digit number"
+                        placeholderTextColor="rgba(255,255,255,0.25)"
+                        value={regMobile}
+                        onChangeText={setRegMobile}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    {!!regMobileErr ? <Text style={styles.loginErrorText}>{regMobileErr}</Text> : null}
+                  </View>
+
+                  {/* Password field */}
+                  <View style={styles.loginInputGroup}>
+                    <Text style={styles.loginInputLabel}>Password</Text>
+                    <View style={[styles.loginInputWrapper, !!regPasswordErr && { borderColor: '#ef4444' }]}>
+                      <MaterialIcons name="lock-outline" size={20} color="#64748b" style={styles.loginInputIcon} />
+                      <TextInput
+                        style={styles.loginTextInput}
+                        placeholder="Min. 8 characters"
+                        placeholderTextColor="rgba(255,255,255,0.25)"
+                        secureTextEntry={true}
+                        value={regPassword}
+                        onChangeText={setRegPassword}
+                        autoCapitalize="none"
+                      />
+                    </View>
+                    {!!regPasswordErr ? <Text style={styles.loginErrorText}>{regPasswordErr}</Text> : null}
+                  </View>
+
+                  <TouchableOpacity 
+                    style={styles.loginBtnPrimary} 
+                    onPress={handleRegSubmit}
+                    disabled={isRegLoading}
+                  >
+                    {isRegLoading ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <Text style={styles.loginBtnTextPrimary}>Register</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={{ alignItems: 'center' }}>
+                  <View style={styles.fpSuccessIconBadge}>
+                    <MaterialIcons name="check" size={32} color="#10b981" />
+                  </View>
+                  <Text style={styles.fpModalTitle}>Account Created!</Text>
+                  <Text style={[styles.fpModalSub, { textAlign: 'center', marginBottom: 24 }]}>
+                    Your account has been successfully created. Please sign in with your email or mobile.
+                  </Text>
+
+                  <TouchableOpacity 
+                    style={styles.loginBtnPrimary} 
+                    onPress={() => {
+                      setShowReg(false);
+                      setLoginIdentifier(regEmail);
+                      setLoginPassword('');
+                    }}
+                  >
+                    <Text style={styles.loginBtnTextPrimary}>Go to Sign In</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           </View>
         </Modal>

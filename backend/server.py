@@ -57,6 +57,35 @@ def login():
     })
 
 
+@app.post("/api/register")
+def register():
+    payload = request.get_json(silent=True) or {}
+    name = (payload.get("name") or "").strip()
+    email = (payload.get("email") or "").strip()
+    mobile = (payload.get("mobile") or "").strip()
+    password = (payload.get("password") or "").strip()
+
+    if not name or not email or not mobile or not password:
+        return jsonify({"error": "All fields (name, email, mobile, password) are required."}), 400
+
+    if len(mobile) != 10 or not mobile.isdigit():
+        return jsonify({"error": "Mobile number must be exactly 10 digits."}), 400
+
+    if "@" not in email or "." not in email:
+        return jsonify({"error": "Please enter a valid email address."}), 400
+
+    if len(password) < 8:
+        return jsonify({"error": "Password must be at least 8 characters."}), 400
+
+    if "fail" in email or "fail" in mobile:
+        return jsonify({"error": "User registration failed. Try another email or number."}), 400
+
+    return jsonify({
+        "success": True,
+        "message": "Account created successfully! Please sign in."
+    })
+
+
 @app.post("/api/forgot-password")
 @app.post("/api/send-otp")
 def send_otp():
