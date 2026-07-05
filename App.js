@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Updates from 'expo-updates';
 
-const DEFAULT_SERVER_URL = 'http://10.168.79.119:8000';
+const DEFAULT_SERVER_URL = 'https://lemon-rice-care.loca.lt';
 
 const TEMPLATES = [
   {
