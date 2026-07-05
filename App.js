@@ -1145,6 +1145,8 @@ export default function App() {
                     )}
                   </TouchableOpacity>
                 </View>
+              ) : null}
+
               {regStep === 2 ? (
                 <View>
                   <Text style={styles.fpModalTitle}>Verify Mobile OTP</Text>
