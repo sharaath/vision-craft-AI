@@ -767,6 +767,32 @@ export default function App() {
           </View>
         </View>
 
+        {/* API Settings toggle on login page for developer easy config */}
+        <TouchableOpacity 
+          style={[styles.settingsToggleBtn, { marginTop: 20, marginBottom: 10, alignSelf: 'center' }]} 
+          onPress={() => setShowSettings(!showSettings)}
+        >
+          <Text style={styles.settingsToggleText}>
+            {showSettings ? "⚙️ Hide API Settings" : "⚙️ Configure API Server"}
+          </Text>
+        </TouchableOpacity>
+
+        {showSettings && (
+          <View style={[styles.settingsContainer, { width: '90%', alignSelf: 'center', marginBottom: 20, backgroundColor: 'rgba(255,255,255,0.03)', padding: 15, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }]}>
+            <Text style={[styles.settingsLabel, { color: '#e2e8f0', fontSize: 13, marginBottom: 5 }]}>Backend API Server URL</Text>
+            <TextInput
+              style={[styles.settingsInput, { backgroundColor: 'rgba(0,0,0,0.3)', color: '#ffffff', padding: 10, borderRadius: 5, fontSize: 14 }]}
+              value={serverUrl}
+              onChangeText={setServerUrl}
+              placeholder="e.g. http://localhost:8000"
+              placeholderTextColor="#555"
+            />
+            <Text style={[styles.settingsDesc, { color: '#64748b', fontSize: 11, marginTop: 5 }]}>
+              Set to your local development machine IP (e.g. http://10.168.79.119:8000) to connect to your local backend server and write to MongoDB Atlas.
+            </Text>
+          </View>
+        )}
+
         {/* FORGOT PASSWORD MODAL OVERLAY */}
         <Modal
           animationType="fade"
