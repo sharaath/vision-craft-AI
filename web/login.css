@@ -149,6 +149,7 @@ body {
 .logo-text .accent {
   background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 

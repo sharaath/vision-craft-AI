@@ -212,54 +212,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // 5. Backend Integrations (Fetch Placeholders)
   // -----------------------------------------------------------
   async function apiCall(endpoint, payload) {
-    // Standard mock latency (600ms) to show spinner states beautifully
-    await new Promise(resolve => setTimeout(resolve, 600));
-
-    // Simulate backend endpoints locally (Replace these with your server integrations)
-    if (endpoint === '/api/login') {
-      const { identifier, password } = payload;
-      // Mock validation
-      if (identifier.includes('fail') || password === 'wrongpwd') {
-        throw new Error('Incorrect password or identifier.');
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'An error occurred. Please try again.');
       }
-      if (identifier.includes('notfound')) {
-        throw new Error('User not found.');
-      }
-      return { success: true, token: 'mock-jwt-token-abcdef123456' };
+      return data;
+    } catch (err) {
+      console.error(`API error on ${endpoint}:`, err);
+      throw new Error(err.message || 'Network error. Please try again.');
     }
-
-    if (endpoint === '/api/register') {
-      const { name, email, mobile, password } = payload;
-      if (!name || !email || !mobile || !password) {
-        throw new Error('All fields are required.');
-      }
-      if (email.includes('fail') || mobile.includes('fail')) {
-        throw new Error('Registration failed. Email or Mobile already exists.');
-      }
-      return { success: true, message: 'Account created successfully' };
-    }
-
-    if (endpoint === '/api/send-otp') {
-      const { identifier } = payload;
-      if (identifier.includes('invalid')) {
-        throw new Error('User not found with this identifier.');
-      }
-      return { success: true, message: 'OTP sent successfully' };
-    }
-
-    if (endpoint === '/api/verify-otp') {
-      const { otp } = payload;
-      if (otp !== '123456' && otp !== '000000') {
-        throw new Error('Invalid OTP code. Try using: 123456.');
-      }
-      return { success: true, message: 'OTP verified successfully' };
-    }
-
-    if (endpoint === '/api/reset-password') {
-      return { success: true, message: 'Password changed successfully' };
-    }
-
-    throw new Error('Network error. Please try again.');
   }
 
   // -----------------------------------------------------------
@@ -295,6 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Save Auth details & Redirect
       localStorage.setItem('visioncraft_jwt_token', response.token);
+      localStorage.setItem('visioncraft_user_name', response.name || 'Innovator');
       
       // Beautiful fade transition on redirect
       document.body.style.opacity = 0;

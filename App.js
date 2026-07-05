@@ -71,6 +71,7 @@ export default function App() {
   const [passwordErr, setPasswordErr] = useState('');
   const [isLoginLoading, setIsLoginLoading] = useState(false);
   const [loginErrorSummary, setLoginErrorSummary] = useState('');
+  const [userName, setUserName] = useState('Innovator');
 
   // Forgot Password modal states
   const [showFp, setShowFp] = useState(false);
@@ -129,6 +130,10 @@ export default function App() {
         // Check auto-login JWT
         const token = await AsyncStorage.getItem('visioncraft_jwt_token');
         if (token) {
+          const savedName = await AsyncStorage.getItem('visioncraft_user_name');
+          if (savedName) {
+            setUserName(savedName);
+          }
           setActiveView('dashboard');
         }
       } catch (e) {
@@ -320,6 +325,8 @@ export default function App() {
       if (response.ok) {
         // Save jwt
         await AsyncStorage.setItem('visioncraft_jwt_token', result.token);
+        await AsyncStorage.setItem('visioncraft_user_name', result.name || 'Innovator');
+        setUserName(result.name || 'Innovator');
 
         // Remember Me state
         if (rememberMe) {
@@ -345,9 +352,11 @@ export default function App() {
   const handleLogout = async () => {
     try {
       await AsyncStorage.removeItem('visioncraft_jwt_token');
+      await AsyncStorage.removeItem('visioncraft_user_name');
       // Reset details & route to login
       setLoginPassword('');
       setLoginErrorSummary('');
+      setUserName('Innovator');
       setActiveView('login');
     } catch (e) {
       console.error("Failed to clear auth token on logout", e);
@@ -1080,7 +1089,7 @@ export default function App() {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
             <View>
               <Text style={styles.logo}>VisionCraft<Text style={styles.logoAI}>AI</Text></Text>
-              <Text style={styles.dashboardTagline}>Your Personal AI Incubator</Text>
+              <Text style={styles.dashboardTagline}>Welcome back, {userName}!</Text>
             </View>
             <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} aria-label="Logout">
               <MaterialIcons name="logout" size={22} color="#f43f5e" />

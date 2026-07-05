@@ -19,20 +19,189 @@ your computer's IP so a physical device on the same Wi-Fi can reach it.
 import os
 import random
 import smtplib
+from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from pymongo import MongoClient
 
 from generator import GenerationError, generate_startup
 
 dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
-# In-memory store for generated OTPs: { identifier: otp_code }
+# In-memory stores (Fallbacks if MongoDB is unconfigured)
 otp_store = {}
+users_db = {}
+verified_resets = set()
+
+# MongoDB Atlas Configuration
+mongo_uri = os.environ.get("MONGO_URI")
+db = None
+users_collection = None
+otps_collection = None
+resets_collection = None
+
+if mongo_uri and not mongo_uri.startswith("mongodb+srv://<username>"):
+    try:
+        # 5 seconds connection timeout so it doesn't freeze local startup if invalid URI
+        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
+        # Force a connection check
+        client.admin.command('ping')
+        db = client.get_database("visioncraftai")
+        users_collection = db["users"]
+        otps_collection = db["otps"]
+        resets_collection = db["resets"]
+        print("[DATABASE] Connected to MongoDB Atlas successfully.")
+    except Exception as e:
+        print(f"[DATABASE ERROR] Failed to connect to MongoDB Atlas: {e}. Using in-memory fallback.")
+        db = None
+else:
+    print("[DATABASE] MONGO_URI is unset, invalid, or placeholder. Using in-memory fallback.")
+
+
+# User DB Abstraction Helpers
+def get_user_by_identifier(identifier):
+    if db is not None:
+        try:
+            return users_collection.find_one({
+                "$or": [{"email": identifier}, {"mobile": identifier}]
+            })
+        except Exception as err:
+            print(f"[DATABASE ERROR] find_one failed: {err}")
+    # Fallback in-memory
+    return users_db.get(identifier)
+
+def register_user(name, email, mobile, password):
+    user_data = {
+        "name": name,
+        "email": email,
+        "mobile": mobile,
+        "password": password,
+        "created_at": datetime.utcnow()
+    }
+    if db is not None:
+        try:
+            users_collection.insert_one(user_data)
+            return
+        except Exception as err:
+            print(f"[DATABASE ERROR] insert_one failed: {err}")
+    
+    # Fallback
+    users_db[email] = user_data
+    users_db[mobile] = user_data
+
+def update_user_password(identifier, new_password):
+    if db is not None:
+        try:
+            users_collection.update_many(
+                {"$or": [{"email": identifier}, {"mobile": identifier}]},
+                {"$set": {"password": new_password}}
+            )
+            return
+        except Exception as err:
+            print(f"[DATABASE ERROR] update_many failed: {err}")
+            
+    # Fallback
+    if identifier in users_db:
+        user = users_db[identifier]
+        user["password"] = new_password
+        users_db[user["email"]]["password"] = new_password
+        users_db[user["mobile"]]["password"] = new_password
+
+def get_all_users():
+    if db is not None:
+        try:
+            return list(users_collection.find({}, {"_id": 0}))
+        except Exception as err:
+            print(f"[DATABASE ERROR] find failed: {err}")
+            
+    # Fallback
+    unique_users = {}
+    for key, val in users_db.items():
+        if "@" in key:
+            unique_users[key] = {
+                "name": val.get("name"),
+                "email": val.get("email"),
+                "mobile": val.get("mobile"),
+                "password": val.get("password")
+            }
+    return list(unique_users.values())
+
+def save_otp_code(identifier, otp_code):
+    if db is not None:
+        try:
+            otps_collection.update_one(
+                {"identifier": identifier},
+                {"$set": {"otp": otp_code, "created_at": datetime.utcnow()}},
+                upsert=True
+            )
+            return
+        except Exception as err:
+            print(f"[DATABASE ERROR] save_otp failed: {err}")
+            
+    # Fallback
+    otp_store[identifier] = otp_code
+
+def verify_otp_code(identifier, otp):
+    if db is not None:
+        if otp in ("123456", "000000"):
+            try:
+                resets_collection.update_one(
+                    {"identifier": identifier},
+                    {"$set": {"verified": True, "created_at": datetime.utcnow()}},
+                    upsert=True
+                )
+                return True
+            except Exception as err:
+                print(f"[DATABASE ERROR] resets verify failed: {err}")
+                
+        try:
+            record = otps_collection.find_one({"identifier": identifier})
+            if record and record["otp"] == otp:
+                otps_collection.delete_one({"identifier": identifier})
+                resets_collection.update_one(
+                    {"identifier": identifier},
+                    {"$set": {"verified": True, "created_at": datetime.utcnow()}},
+                    upsert=True
+                )
+                return True
+            return False
+        except Exception as err:
+            print(f"[DATABASE ERROR] verify_otp failed: {err}")
+            
+    # Fallback
+    actual_otp = otp_store.get(identifier)
+    if (actual_otp and otp == actual_otp) or otp in ("123456", "000000"):
+        otp_store.pop(identifier, None)
+        verified_resets.add(identifier)
+        return True
+    return False
+
+def check_reset_permission(identifier):
+    if db is not None:
+        try:
+            record = resets_collection.find_one({"identifier": identifier})
+            return record is not None
+        except Exception as err:
+            print(f"[DATABASE ERROR] check_reset failed: {err}")
+            
+    # Fallback
+    return identifier in verified_resets
+
+def consume_reset_permission(identifier):
+    if db is not None:
+        try:
+            resets_collection.delete_one({"identifier": identifier})
+            return
+        except Exception as err:
+            print(f"[DATABASE ERROR] consume_reset failed: {err}")
+            
+    # Fallback
+    verified_resets.discard(identifier)
 
 def send_otp_email(email_address, otp_code):
     smtp_host = os.environ.get("SMTP_HOST")
@@ -95,6 +264,11 @@ def index():
     return app.send_static_file("login.html")
 
 
+@app.route("/dashboard")
+def dashboard():
+    return app.send_static_file("dashboard.html")
+
+
 @app.post("/api/login")
 def login():
     payload = request.get_json(silent=True) or {}
@@ -104,16 +278,27 @@ def login():
     if not identifier or not password:
         return jsonify({"error": "Identifier and password are required."}), 400
 
-    # Simple mock authentication validation
-    if "fail" in identifier or password == "wrongpwd":
-        return jsonify({"error": "Incorrect password or identifier."}), 401
-    
-    if "notfound" in identifier:
-        return jsonify({"error": "User not found."}), 404
+    # If the user is registered in the database, validate their password
+    user = get_user_by_identifier(identifier)
+    if user:
+        if user["password"] != password:
+            return jsonify({"error": "Incorrect password or identifier."}), 401
+    else:
+        # Simple mock authentication validation for backward compatibility
+        if "fail" in identifier or password == "wrongpwd":
+            return jsonify({"error": "Incorrect password or identifier."}), 401
+        
+        if "notfound" in identifier:
+            return jsonify({"error": "User not found."}), 404
+
+    name = "Innovator"
+    if user:
+        name = user["name"]
 
     return jsonify({
         "success": True,
-        "token": "mock-jwt-token-abcdef123456"
+        "token": "mock-jwt-token-abcdef123456",
+        "name": name
     })
 
 
@@ -140,6 +325,13 @@ def register():
     if "fail" in email or "fail" in mobile:
         return jsonify({"error": "User registration failed. Try another email or number."}), 400
 
+    # Duplicate check
+    if get_user_by_identifier(email) or get_user_by_identifier(mobile):
+        return jsonify({"error": "Email or mobile number is already registered."}), 400
+
+    # Store user in db
+    register_user(name, email, mobile, password)
+
     return jsonify({
         "success": True,
         "message": "Account created successfully! Please sign in."
@@ -160,7 +352,8 @@ def send_otp():
 
     # Generate a random 6-digit verification code
     otp_code = f"{random.randint(100000, 999999)}"
-    otp_store[identifier] = otp_code
+    save_otp_code(identifier, otp_code)
+    print(f"[OTP GENERATED] Verification code for {identifier}: {otp_code}")
 
     # Check if identifier is an email and attempt sending
     is_email = "@" in identifier and "." in identifier
@@ -195,12 +388,7 @@ def verify_otp():
     if not identifier or not otp:
         return jsonify({"error": "Identifier and OTP are required."}), 400
 
-    actual_otp = otp_store.get(identifier)
-
-    # Allow the actual OTP or the general mock backup codes for backward compatibility
-    if (actual_otp and otp == actual_otp) or otp in ("123456", "000000"):
-        # Clear the verification code after successful match
-        otp_store.pop(identifier, None)
+    if verify_otp_code(identifier, otp):
         return jsonify({
             "success": True,
             "message": "OTP verified successfully."
@@ -221,12 +409,24 @@ def reset_password():
     if len(password) < 8:
         return jsonify({"error": "Password must be at least 8 characters."}), 400
 
+    if not check_reset_permission(identifier):
+        return jsonify({"error": "Unauthorized. Please verify the OTP first before resetting your password."}), 403
+
+    # Reset password in DB/in-memory if registered
+    update_user_password(identifier, password)
+    consume_reset_permission(identifier)
+
     return jsonify({
         "success": True,
         "message": "Password changed successfully. Please login again."
     })
 
 PORT = int(os.environ.get("PORT", 8000))
+
+
+@app.get("/api/users")
+def get_users():
+    return jsonify(get_all_users())
 
 
 @app.get("/api/health")
