@@ -338,6 +338,69 @@ def register():
     })
 
 
+@app.post("/api/register/send-otp")
+def register_send_otp():
+    payload = request.get_json(silent=True) or {}
+    name = (payload.get("name") or "").strip()
+    email = (payload.get("email") or "").strip()
+    mobile = (payload.get("mobile") or "").strip()
+    password = (payload.get("password") or "").strip()
+
+    if not name or not email or not mobile or not password:
+        return jsonify({"error": "All fields (name, email, mobile, password) are required."}), 400
+
+    if len(mobile) != 10 or not mobile.isdigit():
+        return jsonify({"error": "Mobile number must be exactly 10 digits."}), 400
+
+    if "@" not in email or "." not in email:
+        return jsonify({"error": "Please enter a valid email address."}), 400
+
+    if len(password) < 8:
+        return jsonify({"error": "Password must be at least 8 characters."}), 400
+
+    # Duplicate check
+    if get_user_by_identifier(email) or get_user_by_identifier(mobile):
+        return jsonify({"error": "Email or mobile number is already registered."}), 400
+
+    # Generate a random 6-digit verification code
+    otp_code = f"{random.randint(100000, 999999)}"
+    save_otp_code(mobile, otp_code)
+    print(f"[REGISTRATION OTP] Code for {mobile}: {otp_code}")
+    print(f"[SMS MOCK] Registration SMS OTP for {mobile}: {otp_code}")
+
+    return jsonify({
+        "success": True,
+        "message": f"Verification OTP sent successfully via SMS. Check console or use {otp_code}."
+    })
+
+
+@app.post("/api/register/verify")
+def register_verify():
+    payload = request.get_json(silent=True) or {}
+    name = (payload.get("name") or "").strip()
+    email = (payload.get("email") or "").strip()
+    mobile = (payload.get("mobile") or "").strip()
+    password = (payload.get("password") or "").strip()
+    otp = (payload.get("otp") or "").strip()
+
+    if not name or not email or not mobile or not password or not otp:
+        return jsonify({"error": "All fields (name, email, mobile, password, otp) are required."}), 400
+
+    # Verify registration OTP code
+    if verify_otp_code(mobile, otp):
+        # Duplicate check to ensure no race conditions
+        if get_user_by_identifier(email) or get_user_by_identifier(mobile):
+            return jsonify({"error": "Email or mobile number is already registered."}), 400
+
+        register_user(name, email, mobile, password)
+        return jsonify({
+            "success": True,
+            "message": "Account created successfully! Please sign in."
+        })
+
+    return jsonify({"error": "Invalid registration OTP verification code."}), 400
+
+
 @app.post("/api/forgot-password")
 @app.post("/api/send-otp")
 def send_otp():

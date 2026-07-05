@@ -312,6 +312,32 @@
         </button>
       </div>
 
+      <!-- Registration OTP Step -->
+      <div class="modal-step hidden" id="reg-step-otp">
+        <h2>Verify Registration OTP</h2>
+        <p>A 6-digit verification code has been sent to your mobile number. Enter it below to complete registration.</p>
+        
+        <!-- OTP Field -->
+        <div class="input-group">
+          <label for="reg-otp">6-Digit Verification Code</label>
+          <div class="input-wrapper">
+            <span class="input-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </span>
+            <input type="text" id="reg-otp" placeholder="Enter 6-digit OTP" maxlength="6" style="letter-spacing: 0.3em; text-align: center; font-size: 1.2rem;">
+          </div>
+          <span class="error-msg" id="reg-otp-error"></span>
+        </div>
+
+        <button type="button" class="btn btn-primary modal-action-btn" id="reg-verify-btn">
+          <span class="btn-text">Verify & Register</span>
+          <div class="spinner hidden" id="reg-verify-spinner"></div>
+        </button>
+      </div>
+
       <!-- Success Screen -->
       <div class="modal-step hidden" id="reg-step-success">
         <div class="success-icon-badge">

@@ -37,6 +37,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const regSubmitBtn = document.getElementById('reg-submit-btn');
   const regSpinner = document.getElementById('reg-spinner');
   const regStepForm = document.getElementById('reg-step-form');
+  const regStepOtp = document.getElementById('reg-step-otp');
+  const regOtpInput = document.getElementById('reg-otp');
+  const regOtpError = document.getElementById('reg-otp-error');
+  const regVerifyBtn = document.getElementById('reg-verify-btn');
+  const regVerifySpinner = document.getElementById('reg-verify-spinner');
   const regStepSuccess = document.getElementById('reg-step-success');
   const regLoginRedirectBtn = document.getElementById('reg-login-redirect');
 
@@ -568,22 +573,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function resetRegModalState() {
     regStepForm.classList.remove('hidden');
+    regStepOtp.classList.add('hidden');
     regStepSuccess.classList.add('hidden');
     
     regNameInput.value = '';
     regEmailInput.value = '';
     regMobileInput.value = '';
     regPasswordInput.value = '';
+    regOtpInput.value = '';
     
     regNameError.textContent = '';
     regEmailError.textContent = '';
     regMobileError.textContent = '';
     regPasswordError.textContent = '';
+    regOtpError.textContent = '';
     
     regNameInput.classList.remove('error');
     regEmailInput.classList.remove('error');
     regMobileInput.classList.remove('error');
     regPasswordInput.classList.remove('error');
+    regOtpInput.classList.remove('error');
   }
 
   // Register Form Submit
@@ -644,9 +653,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     try {
-      await apiCall('/api/register', payload);
+      await apiCall('/api/register/send-otp', payload);
       regStepForm.classList.add('hidden');
-      regStepSuccess.classList.remove('hidden');
+      regStepOtp.classList.remove('hidden');
+      regOtpInput.value = '';
+      regOtpError.textContent = '';
     } catch (err) {
       regEmailError.textContent = err.message;
       regEmailInput.classList.add('error');
@@ -654,6 +665,43 @@ document.addEventListener('DOMContentLoaded', () => {
       regSubmitBtn.disabled = false;
       regSpinner.classList.add('hidden');
       regSubmitBtn.querySelector('.btn-text').style.opacity = 1;
+    }
+  });
+
+  // Verify Registration OTP Submit
+  regVerifyBtn.addEventListener('click', async () => {
+    const otpVal = regOtpInput.value.trim();
+    if (otpVal.length !== 6) {
+      regOtpError.textContent = 'Please enter the 6-digit code.';
+      regOtpInput.classList.add('error');
+      return;
+    }
+    regOtpError.textContent = '';
+    regOtpInput.classList.remove('error');
+
+    regVerifyBtn.disabled = true;
+    regVerifySpinner.classList.remove('hidden');
+    regVerifyBtn.querySelector('.btn-text').style.opacity = 0;
+
+    const payload = {
+      name: regNameInput.value.trim(),
+      email: regEmailInput.value.trim(),
+      mobile: regMobileInput.value.trim(),
+      password: regPasswordInput.value,
+      otp: otpVal
+    };
+
+    try {
+      await apiCall('/api/register/verify', payload);
+      regStepOtp.classList.add('hidden');
+      regStepSuccess.classList.remove('hidden');
+    } catch (err) {
+      regOtpError.textContent = err.message;
+      regOtpInput.classList.add('error');
+    } finally {
+      regVerifyBtn.disabled = false;
+      regVerifySpinner.classList.add('hidden');
+      regVerifyBtn.querySelector('.btn-text').style.opacity = 1;
     }
   });
 

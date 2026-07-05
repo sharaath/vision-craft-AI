@@ -89,7 +89,7 @@ export default function App() {
 
   // Mobile Registration states
   const [showReg, setShowReg] = useState(false);
-  const [regStep, setRegStep] = useState(1); // 1 = Form, 2 = Success
+  const [regStep, setRegStep] = useState(1); // 1 = Form, 2 = OTP, 3 = Success
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regMobile, setRegMobile] = useState('');
@@ -98,7 +98,19 @@ export default function App() {
   const [regEmailErr, setRegEmailErr] = useState('');
   const [regMobileErr, setRegMobileErr] = useState('');
   const [regPasswordErr, setRegPasswordErr] = useState('');
+  const [regOtp, setRegOtp] = useState(['', '', '', '', '', '']);
+  const [regOtpErr, setRegOtpErr] = useState('');
   const [isRegLoading, setIsRegLoading] = useState(false);
+
+  // Refs for registration OTP input boxes focus shifting
+  const regOtpRefs = [
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null),
+    useRef(null)
+  ];
 
   // Refs for OTP input boxes focus shifting
   const otpRefs = [
@@ -231,7 +243,7 @@ export default function App() {
     setIsRegLoading(true);
 
     try {
-      const response = await fetch(`${serverUrl.trim()}/api/register`, {
+      const response = await fetch(`${serverUrl.trim()}/api/register/send-otp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -246,9 +258,70 @@ export default function App() {
       });
       const result = await response.json();
       if (response.ok) {
+        setRegOtp(['', '', '', '', '', '']);
+        setRegOtpErr('');
         setRegStep(2);
       } else {
         setRegEmailErr(result.error || 'Registration failed.');
+      }
+    } catch (err) {
+      Alert.alert('Network Error', 'Could not reach server.');
+    }
+    setIsRegLoading(false);
+  };
+
+  const handleRegOtpChange = (text, index) => {
+    const newOtp = [...regOtp];
+    const digit = text.replace(/[^0-9]/g, '');
+    newOtp[index] = digit;
+    setRegOtp(newOtp);
+    setRegOtpErr('');
+
+    if (digit && index < 5) {
+      regOtpRefs[index + 1].current?.focus();
+    }
+  };
+
+  const handleRegOtpKeyPress = (e, index) => {
+    if (e.nativeEvent.key === 'Backspace') {
+      if (!regOtp[index] && index > 0) {
+        const newOtp = [...regOtp];
+        newOtp[index - 1] = '';
+        setRegOtp(newOtp);
+        regOtpRefs[index - 1].current?.focus();
+      }
+    }
+  };
+
+  const handleRegVerify = async () => {
+    const otpCode = regOtp.join('');
+    if (otpCode.length !== 6) {
+      setRegOtpErr('Please enter the 6-digit code.');
+      return;
+    }
+    setRegOtpErr('');
+    setIsRegLoading(true);
+
+    try {
+      const response = await fetch(`${serverUrl.trim()}/api/register/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true'
+        },
+        body: JSON.stringify({
+          name: regName.trim(),
+          email: regEmail.trim(),
+          mobile: regMobile.trim(),
+          password: regPassword,
+          otp: otpCode
+        })
+      });
+      const result = await response.json();
+      if (response.ok) {
+        setRegStep(3);
+      } else {
+        setRegOtpErr(result.error || 'Verification failed. Incorrect code.');
       }
     } catch (err) {
       Alert.alert('Network Error', 'Could not reach server.');
@@ -1072,7 +1145,45 @@ export default function App() {
                     )}
                   </TouchableOpacity>
                 </View>
-              ) : (
+              {regStep === 2 ? (
+                <View>
+                  <Text style={styles.fpModalTitle}>Verify Mobile OTP</Text>
+                  <Text style={styles.fpModalSub}>Enter the 6-digit registration OTP code sent to your mobile number below to complete registration.</Text>
+
+                  <View style={styles.loginInputGroup}>
+                    <Text style={styles.loginInputLabel}>6-Digit Verification Code</Text>
+                    <View style={styles.fpOtpContainer}>
+                      {regOtp.map((digit, idx) => (
+                        <TextInput
+                          key={idx}
+                          ref={regOtpRefs[idx]}
+                          style={styles.fpOtpInput}
+                          maxLength={1}
+                          keyboardType="numeric"
+                          value={digit}
+                          onChangeText={(text) => handleRegOtpChange(text, idx)}
+                          onKeyPress={(e) => handleRegOtpKeyPress(e, idx)}
+                        />
+                      ))}
+                    </View>
+                    {!!regOtpErr ? <Text style={styles.loginErrorText}>{regOtpErr}</Text> : null}
+                  </View>
+
+                  <TouchableOpacity 
+                    style={styles.loginBtnPrimary} 
+                    onPress={handleRegVerify}
+                    disabled={isRegLoading}
+                  >
+                    {isRegLoading ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <Text style={styles.loginBtnTextPrimary}>Verify & Register</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              {regStep === 3 ? (
                 <View style={{ alignItems: 'center' }}>
                   <View style={styles.fpSuccessIconBadge}>
                     <MaterialIcons name="check" size={32} color="#10b981" />
@@ -1093,7 +1204,7 @@ export default function App() {
                     <Text style={styles.loginBtnTextPrimary}>Go to Sign In</Text>
                   </TouchableOpacity>
                 </View>
-              )}
+              ) : null}
             </View>
           </View>
         </Modal>
