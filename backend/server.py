@@ -223,11 +223,11 @@ def consume_reset_permission(identifier):
     verified_resets.discard(identifier)
 
 def send_otp_email(email_address, otp_code):
-    smtp_host = os.environ.get("SMTP_HOST")
-    smtp_port = os.environ.get("SMTP_PORT")
-    smtp_username = os.environ.get("SMTP_USERNAME")
-    smtp_password = os.environ.get("SMTP_PASSWORD")
-    smtp_sender = os.environ.get("SMTP_SENDER", smtp_username)
+    smtp_host = (os.environ.get("SMTP_HOST") or "").strip()
+    smtp_port = (os.environ.get("SMTP_PORT") or "").strip()
+    smtp_username = (os.environ.get("SMTP_USERNAME") or "").strip()
+    smtp_password = (os.environ.get("SMTP_PASSWORD") or "").strip()
+    smtp_sender = (os.environ.get("SMTP_SENDER") or "").strip() or smtp_username
 
     if not smtp_host or not smtp_username or not smtp_password:
         print(f"[SMTP MOCK] No SMTP credentials configured in .env. Generated OTP for {email_address}: {otp_code}")
