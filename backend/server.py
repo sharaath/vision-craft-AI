@@ -275,12 +275,12 @@ def send_otp_email(email_address, otp_code):
         return False
 
 
-app = Flask(__name__, static_folder='../web', static_url_path='')
+app = Flask(__name__, static_folder='../public', static_url_path='')
 CORS(app)  # allow the Expo app (different origin/device) to call this API
 
 @app.route("/")
 def index():
-    return app.send_static_file("login.html")
+    return app.send_static_file("index.html")
 
 
 @app.route("/dashboard")
