@@ -8,7 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Updates from 'expo-updates';
 
-const DEFAULT_SERVER_URL = 'https://all-pigs-argue.loca.lt';
+const DEFAULT_SERVER_URL = 'https://vision-craft-ai.onrender.com';
 
 const TEMPLATES = [
   {
@@ -72,6 +72,9 @@ export default function App() {
   const [isLoginLoading, setIsLoginLoading] = useState(false);
   const [loginErrorSummary, setLoginErrorSummary] = useState('');
   const [userName, setUserName] = useState('Innovator');
+  const [userIdentifier, setUserIdentifier] = useState('');
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   // Forgot Password modal states
   const [showFp, setShowFp] = useState(false);
@@ -145,6 +148,10 @@ export default function App() {
           const savedName = await AsyncStorage.getItem('visioncraft_user_name');
           if (savedName) {
             setUserName(savedName);
+          }
+          const savedIdentifier = await AsyncStorage.getItem('visioncraft_user_identifier');
+          if (savedIdentifier) {
+            setUserIdentifier(savedIdentifier);
           }
           setActiveView('dashboard');
         }
@@ -399,7 +406,9 @@ export default function App() {
         // Save jwt
         await AsyncStorage.setItem('visioncraft_jwt_token', result.token);
         await AsyncStorage.setItem('visioncraft_user_name', result.name || 'Innovator');
+        await AsyncStorage.setItem('visioncraft_user_identifier', loginIdentifier.trim());
         setUserName(result.name || 'Innovator');
+        setUserIdentifier(loginIdentifier.trim());
 
         // Remember Me state
         if (rememberMe) {
@@ -426,14 +435,54 @@ export default function App() {
     try {
       await AsyncStorage.removeItem('visioncraft_jwt_token');
       await AsyncStorage.removeItem('visioncraft_user_name');
+      await AsyncStorage.removeItem('visioncraft_user_identifier');
       // Reset details & route to login
       setLoginPassword('');
       setLoginErrorSummary('');
       setUserName('Innovator');
+      setUserIdentifier('');
+      setShowSettingsModal(false);
       setActiveView('login');
     } catch (e) {
       console.error("Failed to clear auth token on logout", e);
     }
+  };
+
+  const handleDeleteAccount = async () => {
+    Alert.alert(
+      'Delete Account ⚠️',
+      'Are you sure you want to permanently delete your account? This action cannot be undone, and all your saved blueprints will be lost.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete Permanently', 
+          style: 'destructive',
+          onPress: async () => {
+            setIsDeletingAccount(true);
+            try {
+              const response = await fetch(`${serverUrl.trim()}/api/delete-account`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Bypass-Tunnel-Reminder': 'true'
+                },
+                body: JSON.stringify({ identifier: userIdentifier })
+              });
+              const result = await response.json();
+              if (response.ok) {
+                Alert.alert('Account Deleted', 'Your account has been deleted successfully.');
+                await handleLogout();
+              } else {
+                Alert.alert('Error', result.error || 'Failed to delete account.');
+              }
+            } catch (err) {
+              Alert.alert('Network Error', 'Could not reach server to delete account.');
+            }
+            setIsDeletingAccount(false);
+          }
+        }
+      ]
+    );
   };
 
   // -----------------------------------------------------------
@@ -840,31 +889,7 @@ export default function App() {
           </View>
         </View>
 
-        {/* API Settings toggle on login page for developer easy config */}
-        <TouchableOpacity 
-          style={[styles.settingsToggleBtn, { marginTop: 20, marginBottom: 10, alignSelf: 'center' }]} 
-          onPress={() => setShowSettings(!showSettings)}
-        >
-          <Text style={styles.settingsToggleText}>
-            {showSettings ? "⚙️ Hide API Settings" : "⚙️ Configure API Server"}
-          </Text>
-        </TouchableOpacity>
 
-        {showSettings && (
-          <View style={[styles.settingsContainer, { width: '90%', alignSelf: 'center', marginBottom: 20, backgroundColor: 'rgba(255,255,255,0.03)', padding: 15, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }]}>
-            <Text style={[styles.settingsLabel, { color: '#e2e8f0', fontSize: 13, marginBottom: 5 }]}>Backend API Server URL</Text>
-            <TextInput
-              style={[styles.settingsInput, { backgroundColor: 'rgba(0,0,0,0.3)', color: '#ffffff', padding: 10, borderRadius: 5, fontSize: 14 }]}
-              value={serverUrl}
-              onChangeText={setServerUrl}
-              placeholder="e.g. http://localhost:8000"
-              placeholderTextColor="#555"
-            />
-            <Text style={[styles.settingsDesc, { color: '#64748b', fontSize: 11, marginTop: 5 }]}>
-              Set to your local development machine IP (e.g. http://10.168.79.119:8000) to connect to your local backend server and write to MongoDB Atlas.
-            </Text>
-          </View>
-        )}
 
         {/* FORGOT PASSWORD MODAL OVERLAY */}
         <Modal
@@ -1230,9 +1255,14 @@ export default function App() {
               <Text style={styles.logo}>VisionCraft<Text style={styles.logoAI}>AI</Text></Text>
               <Text style={styles.dashboardTagline}>Welcome back, {userName}!</Text>
             </View>
-            <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} aria-label="Logout">
-              <MaterialIcons name="logout" size={22} color="#f43f5e" />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity onPress={() => setShowSettingsModal(true)} style={[styles.logoutBtn, { marginRight: 15 }]} aria-label="Settings">
+                <MaterialIcons name="settings" size={22} color="#94a3b8" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} aria-label="Logout">
+                <MaterialIcons name="logout" size={22} color="#f43f5e" />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -1309,6 +1339,45 @@ export default function App() {
             <Text style={styles.fabText}>+ Craft New</Text>
           </TouchableOpacity>
         )}
+
+        {/* SETTINGS MODAL */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={showSettingsModal}
+          onRequestClose={() => setShowSettingsModal(false)}
+        >
+          <View style={styles.fpModalOverlay}>
+            <View style={styles.fpModalCard}>
+              <TouchableOpacity style={styles.fpModalClose} onPress={() => setShowSettingsModal(false)}>
+                <MaterialIcons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+              
+              <Text style={styles.fpModalTitle}>⚙️ Settings</Text>
+              <Text style={[styles.fpModalSub, { marginBottom: 20 }]}>Manage your VisionCraft AI account details.</Text>
+
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', padding: 15, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', marginBottom: 25 }}>
+                <Text style={{ color: '#64748b', fontSize: 12, marginBottom: 4 }}>Full Name</Text>
+                <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '500', marginBottom: 12 }}>{userName}</Text>
+                
+                <Text style={{ color: '#64748b', fontSize: 12, marginBottom: 4 }}>Account Identifier</Text>
+                <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '500' }}>{userIdentifier || 'Logged In'}</Text>
+              </View>
+
+              <TouchableOpacity 
+                style={[styles.loginBtnPrimary, { backgroundColor: '#e11d48', borderColor: '#e11d48' }]} 
+                onPress={handleDeleteAccount}
+                disabled={isDeletingAccount}
+              >
+                {isDeletingAccount ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.loginBtnTextPrimary}>Delete Account</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   }

@@ -50,3 +50,5 @@ backend/__pycache__/
 # generated native folders
 /ios
 /android
+
+.vercel

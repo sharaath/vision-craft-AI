@@ -112,6 +112,25 @@ def update_user_password(identifier, new_password):
         users_db[user["email"]]["password"] = new_password
         users_db[user["mobile"]]["password"] = new_password
 
+def delete_user_by_identifier(identifier):
+    if db is not None:
+        try:
+            result = users_collection.delete_many({
+                "$or": [{"email": identifier}, {"mobile": identifier}]
+            })
+            return result.deleted_count > 0
+        except Exception as err:
+            print(f"[DATABASE ERROR] delete failed: {err}")
+            
+    # Fallback
+    deleted = False
+    if identifier in users_db:
+        user = users_db.pop(identifier)
+        users_db.pop(user.get("email"), None)
+        users_db.pop(user.get("mobile"), None)
+        deleted = True
+    return deleted
+
 def get_all_users():
     if db is not None:
         try:
@@ -483,6 +502,25 @@ def reset_password():
         "success": True,
         "message": "Password changed successfully. Please login again."
     })
+
+
+@app.post("/api/delete-account")
+def delete_account():
+    payload = request.get_json(silent=True) or {}
+    identifier = (payload.get("identifier") or "").strip()
+
+    if not identifier:
+        return jsonify({"error": "Identifier is required."}), 400
+
+    deleted = delete_user_by_identifier(identifier)
+    if deleted:
+        return jsonify({
+            "success": True,
+            "message": "Account deleted successfully."
+        })
+    else:
+        return jsonify({"error": "User not found or deletion failed."}), 404
+
 
 PORT = int(os.environ.get("PORT", 8000))
 
