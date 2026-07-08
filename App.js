@@ -1182,8 +1182,8 @@ export default function App() {
 
               {regStep === 2 ? (
                 <View>
-                  <Text style={styles.fpModalTitle}>Verify Mobile OTP</Text>
-                  <Text style={styles.fpModalSub}>Enter the 6-digit registration OTP code sent to your mobile number below to complete registration.</Text>
+                  <Text style={styles.fpModalTitle}>Verify Registration OTP</Text>
+                  <Text style={styles.fpModalSub}>Enter the 6-digit registration OTP code sent to your email address below to complete registration.</Text>
 
                   <View style={styles.loginInputGroup}>
                     <Text style={styles.loginInputLabel}>6-Digit Verification Code</Text>

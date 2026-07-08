@@ -384,12 +384,13 @@ def register_send_otp():
     # Generate a random 6-digit verification code
     otp_code = f"{random.randint(100000, 999999)}"
     save_otp_code(mobile, otp_code)
-    print(f"[REGISTRATION OTP] Code for {mobile}: {otp_code}")
-    print(f"[SMS MOCK] Registration SMS OTP for {mobile}: {otp_code}")
+    
+    # Send the OTP code via email
+    send_otp_email(email, otp_code)
 
     return jsonify({
         "success": True,
-        "message": f"Verification OTP sent successfully via SMS. Check console or use {otp_code}."
+        "message": "Verification OTP sent successfully to your email address."
     })
 
 
