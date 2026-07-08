@@ -449,6 +449,14 @@ export default function App() {
   };
 
   const handleDeleteAccount = async () => {
+    if (!userIdentifier) {
+      Alert.alert(
+        'Session Expired ⚠️',
+        'Please log out and log back in once to sync your account details and enable deletion.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
     Alert.alert(
       'Delete Account ⚠️',
       'Are you sure you want to permanently delete your account? This action cannot be undone, and all your saved blueprints will be lost.',
@@ -1361,7 +1369,10 @@ export default function App() {
                 <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '500', marginBottom: 12 }}>{userName}</Text>
                 
                 <Text style={{ color: '#64748b', fontSize: 12, marginBottom: 4 }}>Account Identifier</Text>
-                <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '500' }}>{userIdentifier || 'Logged In'}</Text>
+                <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '500', marginBottom: 12 }}>{userIdentifier || 'Logged In'}</Text>
+
+                <Text style={{ color: '#64748b', fontSize: 12, marginBottom: 4 }}>API Server URL</Text>
+                <Text style={{ color: '#ffffff', fontSize: 14 }}>{serverUrl}</Text>
               </View>
 
               <TouchableOpacity 
@@ -1778,32 +1789,7 @@ ${data.blueprint?.tech_stack}
             <Text style={styles.buttonText}>🚀 Craft Startup Blueprint</Text>
           </TouchableOpacity>
 
-          {/* Settings Toggle */}
-          <TouchableOpacity 
-            style={styles.settingsToggleBtn} 
-            onPress={() => setShowSettings(!showSettings)}
-          >
-            <Text style={styles.settingsToggleText}>
-              {showSettings ? "⚙️ Hide API Settings" : "⚙️ Configure API Server"}
-            </Text>
-          </TouchableOpacity>
 
-          {/* Settings Panel */}
-          {showSettings && (
-            <View style={styles.settingsContainer}>
-              <Text style={styles.settingsLabel}>Backend API Server URL</Text>
-              <TextInput
-                style={styles.settingsInput}
-                value={serverUrl}
-                onChangeText={setServerUrl}
-                placeholder="e.g. http://localhost:8000"
-                placeholderTextColor="#555"
-              />
-              <Text style={styles.settingsDesc}>
-                Using localtunnel? Use the tunnel URL. Using local environment? Use your computer's IP (e.g. http://192.168.1.5:8000).
-              </Text>
-            </View>
-          )}
         </View>
       </ScrollView>
     );
