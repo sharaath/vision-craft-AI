@@ -233,12 +233,10 @@ def send_otp_email(email_address, otp_code):
         print(f"[SMTP MOCK] No SMTP credentials configured in .env. Generated OTP for {email_address}: {otp_code}")
         return False
 
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = smtp_sender
-        msg['To'] = email_address
-        msg['Subject'] = "Your VisionCraft AI Verification Code"
+    import urllib.request
+    import json
 
+    try:
         body = f"""
         <html>
         <body style="font-family: Arial, sans-serif; background-color: #0b0b16; color: #ffffff; padding: 20px; border-radius: 10px;">
@@ -256,22 +254,33 @@ def send_otp_email(email_address, otp_code):
         </body>
         </html>
         """
-        msg.attach(MIMEText(body, 'html'))
 
-        port = int(smtp_port) if smtp_port else 587
-        if port == 465:
-            server = smtplib.SMTP_SSL(smtp_host, port)
-        else:
-            server = smtplib.SMTP(smtp_host, port)
-            server.starttls()
+        payload = {
+            "auth": {
+                "host": smtp_host,
+                "port": smtp_port,
+                "user": smtp_username,
+                "pass": smtp_password,
+                "senderName": "VisionCraft AI"
+            },
+            "to": email_address,
+            "subject": "Your VisionCraft AI Verification Code",
+            "html": body
+        }
 
-        server.login(smtp_username, smtp_password)
-        server.sendmail(smtp_sender, email_address, msg.as_string())
-        server.quit()
-        print(f"[SMTP SUCCESS] OTP successfully sent to {email_address}")
-        return True
+        # Send via Vercel proxy to bypass Render's outbound SMTP block
+        req = urllib.request.Request(
+            "https://vision-craft-ai-dusky.vercel.app/api/send-email",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"}
+        )
+        
+        with urllib.request.urlopen(req, timeout=15) as response:
+            res_body = response.read().decode("utf-8")
+            print(f"[SMTP SUCCESS] Email successfully sent to {email_address} via Vercel: {res_body}")
+            return True
     except Exception as e:
-        print(f"[SMTP ERROR] Failed to send email to {email_address}: {e}")
+        print(f"[SMTP ERROR] Failed to send email to {email_address} via Vercel: {e}")
         return False
 
 
